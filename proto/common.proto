@@ -1,0 +1,11 @@
+syntax = "proto3";
+package dto.common;
+
+option go_package = "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/common;common";
+
+message Metrics {
+  double rps = 1;
+  double latency_ms = 2;
+  int64 sent = 3;
+  int64 failed = 4;
+}

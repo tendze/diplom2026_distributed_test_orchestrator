@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package dto.controller;
+
+option go_package = "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/controller;controller";
+
+import "common.proto";
+
+service ControllerService {
+  rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse);
+  rpc StartDistributedTest(StartDistributedTestRequest) returns (StartDistributedTestResponse);
+}
+
+message RegisterAgentRequest {
+  string agent_id = 1;
+  string address = 2;
+}
+
+message RegisterAgentResponse {
+  string status = 1;
+}
+
+message StartDistributedTestRequest {
+  string test_id = 1;
+  string url = 2;
+  int32 target_rps = 3;
+  int32 duration_seconds = 4;
+}
+
+message StartDistributedTestResponse {
+  string status = 1;
+}

@@ -1,0 +1,17 @@
+syntax = "proto3";
+package dto.agent;
+
+import "common.proto";
+
+option go_package = "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent;agent";
+
+service AgentService {
+  rpc StartTest(StartTestRequest) returns (stream dto.common.Metrics);
+}
+
+message StartTestRequest {
+  string test_id = 1;
+  string url = 2;
+  int32 rps = 3;
+  int32 duration_seconds = 4;
+}

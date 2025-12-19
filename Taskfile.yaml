@@ -1,0 +1,12 @@
+version: "3"
+
+tasks:
+  gen-proto:
+    desc: Generate protobuf and gRPC code
+    cmds:
+      - protoc -I proto proto/common.proto --go_out=./gen/common --go_opt=paths=source_relative --go-grpc_out=./gen/common --go-grpc_opt=paths=source_relative
+      - protoc -I proto proto/agent.proto --go_out=./gen/agent --go_opt=paths=source_relative --go-grpc_out=./gen/agent --go-grpc_opt=paths=source_relative
+      - protoc -I proto proto/controller.proto --go_out=./gen/controller --go_opt=paths=source_relative --go-grpc_out=./gen/controller --go-grpc_opt=paths=source_relative
+  run-agent:
+    desc: Runs agent
+    cmd: go run cmd/agent/main.go
