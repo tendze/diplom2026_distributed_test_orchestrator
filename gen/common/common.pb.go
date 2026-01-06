@@ -22,11 +22,18 @@ const (
 )
 
 type Metrics struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Rps           float64                `protobuf:"fixed64,1,opt,name=rps,proto3" json:"rps,omitempty"`
-	LatencyMs     float64                `protobuf:"fixed64,2,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
-	Sent          int64                  `protobuf:"varint,3,opt,name=sent,proto3" json:"sent,omitempty"`
-	Failed        int64                  `protobuf:"varint,4,opt,name=failed,proto3" json:"failed,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Rps    float64                `protobuf:"fixed64,1,opt,name=rps,proto3" json:"rps,omitempty"`
+	Sent   int64                  `protobuf:"varint,2,opt,name=sent,proto3" json:"sent,omitempty"`
+	Failed int64                  `protobuf:"varint,3,opt,name=failed,proto3" json:"failed,omitempty"`
+	// HTTP статусы
+	Req_1Xx int64 `protobuf:"varint,4,opt,name=req_1xx,json=req1xx,proto3" json:"req_1xx,omitempty"`
+	Req_2Xx int64 `protobuf:"varint,5,opt,name=req_2xx,json=req2xx,proto3" json:"req_2xx,omitempty"`
+	Req_3Xx int64 `protobuf:"varint,6,opt,name=req_3xx,json=req3xx,proto3" json:"req_3xx,omitempty"`
+	Req_4Xx int64 `protobuf:"varint,7,opt,name=req_4xx,json=req4xx,proto3" json:"req_4xx,omitempty"`
+	Req_5Xx int64 `protobuf:"varint,8,opt,name=req_5xx,json=req5xx,proto3" json:"req_5xx,omitempty"`
+	// Гистограмма: ключ - latency в мс (верхняя граница), значение - кол-во запросов
+	Buckets       map[int32]int64 `protobuf:"bytes,9,rep,name=buckets,proto3" json:"buckets,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -68,13 +75,6 @@ func (x *Metrics) GetRps() float64 {
 	return 0
 }
 
-func (x *Metrics) GetLatencyMs() float64 {
-	if x != nil {
-		return x.LatencyMs
-	}
-	return 0
-}
-
 func (x *Metrics) GetSent() int64 {
 	if x != nil {
 		return x.Sent
@@ -89,18 +89,67 @@ func (x *Metrics) GetFailed() int64 {
 	return 0
 }
 
+func (x *Metrics) GetReq_1Xx() int64 {
+	if x != nil {
+		return x.Req_1Xx
+	}
+	return 0
+}
+
+func (x *Metrics) GetReq_2Xx() int64 {
+	if x != nil {
+		return x.Req_2Xx
+	}
+	return 0
+}
+
+func (x *Metrics) GetReq_3Xx() int64 {
+	if x != nil {
+		return x.Req_3Xx
+	}
+	return 0
+}
+
+func (x *Metrics) GetReq_4Xx() int64 {
+	if x != nil {
+		return x.Req_4Xx
+	}
+	return 0
+}
+
+func (x *Metrics) GetReq_5Xx() int64 {
+	if x != nil {
+		return x.Req_5Xx
+	}
+	return 0
+}
+
+func (x *Metrics) GetBuckets() map[int32]int64 {
+	if x != nil {
+		return x.Buckets
+	}
+	return nil
+}
+
 var File_common_proto protoreflect.FileDescriptor
 
 const file_common_proto_rawDesc = "" +
 	"\n" +
 	"\fcommon.proto\x12\n" +
-	"dto.common\"f\n" +
+	"dto.common\"\xbc\x02\n" +
 	"\aMetrics\x12\x10\n" +
-	"\x03rps\x18\x01 \x01(\x01R\x03rps\x12\x1d\n" +
-	"\n" +
-	"latency_ms\x18\x02 \x01(\x01R\tlatencyMs\x12\x12\n" +
-	"\x04sent\x18\x03 \x01(\x03R\x04sent\x12\x16\n" +
-	"\x06failed\x18\x04 \x01(\x03R\x06failedBNZLgithub.com/tendze/diplom2026_distributed_test_orchestrator/gen/common;commonb\x06proto3"
+	"\x03rps\x18\x01 \x01(\x01R\x03rps\x12\x12\n" +
+	"\x04sent\x18\x02 \x01(\x03R\x04sent\x12\x16\n" +
+	"\x06failed\x18\x03 \x01(\x03R\x06failed\x12\x17\n" +
+	"\areq_1xx\x18\x04 \x01(\x03R\x06req1xx\x12\x17\n" +
+	"\areq_2xx\x18\x05 \x01(\x03R\x06req2xx\x12\x17\n" +
+	"\areq_3xx\x18\x06 \x01(\x03R\x06req3xx\x12\x17\n" +
+	"\areq_4xx\x18\a \x01(\x03R\x06req4xx\x12\x17\n" +
+	"\areq_5xx\x18\b \x01(\x03R\x06req5xx\x12:\n" +
+	"\abuckets\x18\t \x03(\v2 .dto.common.Metrics.BucketsEntryR\abuckets\x1a:\n" +
+	"\fBucketsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01BNZLgithub.com/tendze/diplom2026_distributed_test_orchestrator/gen/common;commonb\x06proto3"
 
 var (
 	file_common_proto_rawDescOnce sync.Once
@@ -114,16 +163,18 @@ func file_common_proto_rawDescGZIP() []byte {
 	return file_common_proto_rawDescData
 }
 
-var file_common_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_common_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_common_proto_goTypes = []any{
 	(*Metrics)(nil), // 0: dto.common.Metrics
+	nil,             // 1: dto.common.Metrics.BucketsEntry
 }
 var file_common_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	1, // 0: dto.common.Metrics.buckets:type_name -> dto.common.Metrics.BucketsEntry
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_common_proto_init() }
@@ -137,7 +188,7 @@ func file_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_common_proto_rawDesc), len(file_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

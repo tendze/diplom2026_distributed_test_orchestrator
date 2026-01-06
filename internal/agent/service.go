@@ -1,11 +1,15 @@
-package agentservice
+package agent
 
 import (
+	"context"
 	"fmt"
+	"log"
+	"math"
+	"sync"
 	"time"
 
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent"
-	"github.com/tendze/diplom2026_distributed_test_orchestrator/gen/common"
+	commonpb "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/common"
 )
 
 type AgentService struct {
@@ -16,22 +20,83 @@ func (s *AgentService) StartTest(
 	req *agent.StartTestRequest,
 	stream agent.AgentService_StartTestServer,
 ) error {
-	for i := 0; i < 5; i++ {
-		metrics := &common.Metrics{
-			Rps:       100,
-			LatencyMs: 12.5,
-			Sent:      int64(i * 10),
-			Failed:    int64(i),
-		}
+	// Создаем контекст, который отменится либо по длительности теста, либо если клиент (контроллер) отвалится
+	ctx, cancel := context.WithTimeout(stream.Context(), time.Duration(req.DurationSeconds)*time.Second)
+	defer cancel()
 
-		err := stream.Send(metrics)
-		if err != nil {
-			return err
-		}
+	runner := NewHTTPRunner(req.Url)
+	limiter := NewRateLimiter(int(req.Rps))
+	metrics := NewLocalMetrics() 
 
-		time.Sleep(time.Second)
+	// Динамический расчет воркеров
+	// Если RPS маленький (например 10), запустим 5 воркеров.
+	// Если большой - ограничиваем сверху, чтобы не убить сам Агент.
+	workerCount := int(math.Max(1, math.Min(float64(req.Rps/2), 1000)))
+
+	log.Printf("Starting test: ID=%s, RPS=%d, Workers=%d\n", req.TestId, req.Rps, workerCount)
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.runLoad(ctx, runner, limiter, metrics)
+		}()
 	}
 
-	fmt.Println("Agent finished test:", req.TestId)
+	// Воркер стриминга метрик
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.streamMetrics(ctx, metrics, stream)
+	}()
+
+	wg.Wait()
+	fmt.Printf("Test %s finished\n", req.TestId)
 	return nil
+}
+
+func (s *AgentService) runLoad(ctx context.Context, runner *HTTPRunner, limiter *RateLimiter, metrics *LocalMetrics) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			limiter.Wait(ctx)
+
+			status, latency, err := runner.DoRequest()
+			
+			metrics.Add(status, latency, err)
+		}
+	}
+}
+
+func (s *AgentService) streamMetrics(ctx context.Context, metrics *LocalMetrics, stream agent.AgentService_StartTestServer) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sent, failed, statuses, buckets := metrics.Snapshot()
+
+			err := stream.Send(&commonpb.Metrics{
+				Rps:     float64(sent),
+				Sent:    sent,
+				Failed:  failed,
+				Req_1Xx: statuses[0],
+				Req_2Xx: statuses[1],
+				Req_3Xx: statuses[2],
+				Req_4Xx: statuses[3],
+				Req_5Xx: statuses[4],
+				Buckets: buckets,
+			})
+			if err != nil {
+				return
+			}
+		}
+	}
 }

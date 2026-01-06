@@ -1,11 +1,21 @@
 syntax = "proto3";
+
 package dto.common;
 
 option go_package = "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/common;common";
 
 message Metrics {
   double rps = 1;
-  double latency_ms = 2;
-  int64 sent = 3;
-  int64 failed = 4;
+  int64 sent = 2;
+  int64 failed = 3;
+
+  // HTTP статусы
+  int64 req_1xx = 4;
+  int64 req_2xx = 5;
+  int64 req_3xx = 6;
+  int64 req_4xx = 7;
+  int64 req_5xx = 8;
+
+  // Гистограмма: ключ - latency в мс (верхняя граница), значение - кол-во запросов
+  map<int32, int64> buckets = 9;
 }

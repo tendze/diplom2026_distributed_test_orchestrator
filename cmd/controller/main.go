@@ -2,41 +2,52 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"google.golang.org/grpc"
-
-	pb "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/controller"
-	controllerservice "github.com/tendze/diplom2026_distributed_test_orchestrator/internal/controller"
+	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/config"
+	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/controller"
 )
 
 func main() {
-	lis, err := net.Listen("tcp", ":9000")
+	configPath := flag.String("config", "controller.yaml", "Path to controller configuration file")
+	flag.Parse()
+
+	// Загрузка конфигурации
+	cfg, err := config.Load[config.ControllerConfig](*configPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	s := grpc.NewServer()
-	pb.RegisterControllerServiceServer(s, &controllerservice.ControllerService{})
+	// Инициализация агрегатора метрик
+	metrics := controller.NewAggregatedMetrics()
 
-	log.Println("Controller started on :9000")
+	agentAddrs := cfg.Agents.Targets
 
-	go controllerservice.StartTestOnAgent("localhost:9001")
+	// Инициализация оркестратора
+	orchestrator := controller.NewOrchestrator(agentAddrs, metrics)
+
+	// Настройка контекста для корректного завершения (Graceful Shutdown)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	go func() {
-		if err := s.Serve(lis); err != nil {
-			log.Fatal(err)
-		}
-	}()
+	log.Printf("Starting distributed test: URL=%s, TargetRPS=%d", cfg.Test.URL, cfg.Test.TargetRPS)
 
-	<-ctx.Done()
-	
-	log.Println("shutting down controller server")
-	s.GracefulStop()
+	// Запуск теста
+	err = orchestrator.Start(
+		ctx,
+		cfg.Test.ID,
+		cfg.Test.URL,
+		cfg.Test.TargetRPS,
+		cfg.Test.DurationSeconds,
+	)
+
+	if err != nil {
+		log.Fatalf("Test execution failed: %v", err)
+	}
+
+	log.Println("Test completed successfully")
 }

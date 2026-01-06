@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"flag"
 	"log"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -11,14 +12,34 @@ import (
 
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent"
 	agentservice "github.com/tendze/diplom2026_distributed_test_orchestrator/internal/agent"
+	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/config"
 	"google.golang.org/grpc"
 )
 
 func main() {
-	lis, err := net.Listen("tcp", ":9001")
+	configPath := flag.String("config", "agent.yaml", "Path to agent configuration file")
+	listenOverride := flag.String("listen", "", "override listen address (e.g. :9001)")
+	flag.Parse()
+
+	// Загрузка конфигурации
+	cfg, err := config.Load[config.AgentConfig](*configPath)
 	if err != nil {
-		fmt.Println("error creating listener:", err)
-		return
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	if *listenOverride != "" {
+		cfg.Agent.Listen = *listenOverride
+	}
+
+	// Инициализируем красивый логгер
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	slog.SetDefault(logger)
+
+	addr := cfg.Agent.Listen
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		slog.Error("failed to listen", "error", err)
+		os.Exit(1)
 	}
 
 	s := grpc.NewServer()
@@ -29,13 +50,15 @@ func main() {
 	defer stop()
 
 	go func() {
+		slog.Info("agent server starting", "addr", addr)
 		if err := s.Serve(lis); err != nil {
-			log.Fatal(err)
+			slog.Error("failed to serve", "error", err)
 		}
 	}()
 
 	<-ctx.Done()
-	
-	log.Println("shutting down agent server")
+
+	slog.Info("shutting down agent server gracefully...")
 	s.GracefulStop()
+	slog.Info("agent stopped")
 }
