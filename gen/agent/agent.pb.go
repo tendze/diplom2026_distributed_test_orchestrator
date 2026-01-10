@@ -90,6 +90,94 @@ func (x *StartTestRequest) GetDurationSeconds() int32 {
 	return 0
 }
 
+type GetStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetStatusRequest) Reset() {
+	*x = GetStatusRequest{}
+	mi := &file_agent_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetStatusRequest) ProtoMessage() {}
+
+func (x *GetStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetStatusRequest.ProtoReflect.Descriptor instead.
+func (*GetStatusRequest) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{1}
+}
+
+type GetStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CpuCores      int32                  `protobuf:"varint,1,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
+	TotalMemory   uint64                 `protobuf:"varint,2,opt,name=total_memory,json=totalMemory,proto3" json:"total_memory,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetStatusResponse) Reset() {
+	*x = GetStatusResponse{}
+	mi := &file_agent_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetStatusResponse) ProtoMessage() {}
+
+func (x *GetStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetStatusResponse.ProtoReflect.Descriptor instead.
+func (*GetStatusResponse) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *GetStatusResponse) GetCpuCores() int32 {
+	if x != nil {
+		return x.CpuCores
+	}
+	return 0
+}
+
+func (x *GetStatusResponse) GetTotalMemory() uint64 {
+	if x != nil {
+		return x.TotalMemory
+	}
+	return 0
+}
+
 var File_agent_proto protoreflect.FileDescriptor
 
 const file_agent_proto_rawDesc = "" +
@@ -99,9 +187,14 @@ const file_agent_proto_rawDesc = "" +
 	"\atest_id\x18\x01 \x01(\tR\x06testId\x12\x10\n" +
 	"\x03url\x18\x02 \x01(\tR\x03url\x12\x10\n" +
 	"\x03rps\x18\x03 \x01(\x05R\x03rps\x12)\n" +
-	"\x10duration_seconds\x18\x04 \x01(\x05R\x0fdurationSeconds2O\n" +
+	"\x10duration_seconds\x18\x04 \x01(\x05R\x0fdurationSeconds\"\x12\n" +
+	"\x10GetStatusRequest\"S\n" +
+	"\x11GetStatusResponse\x12\x1b\n" +
+	"\tcpu_cores\x18\x01 \x01(\x05R\bcpuCores\x12!\n" +
+	"\ftotal_memory\x18\x02 \x01(\x04R\vtotalMemory2\x97\x01\n" +
 	"\fAgentService\x12?\n" +
-	"\tStartTest\x12\x1b.dto.agent.StartTestRequest\x1a\x13.dto.common.Metrics0\x01BLZJgithub.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent;agentb\x06proto3"
+	"\tStartTest\x12\x1b.dto.agent.StartTestRequest\x1a\x13.dto.common.Metrics0\x01\x12F\n" +
+	"\tGetStatus\x12\x1b.dto.agent.GetStatusRequest\x1a\x1c.dto.agent.GetStatusResponseBLZJgithub.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent;agentb\x06proto3"
 
 var (
 	file_agent_proto_rawDescOnce sync.Once
@@ -115,16 +208,20 @@ func file_agent_proto_rawDescGZIP() []byte {
 	return file_agent_proto_rawDescData
 }
 
-var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_agent_proto_goTypes = []any{
-	(*StartTestRequest)(nil), // 0: dto.agent.StartTestRequest
-	(*common.Metrics)(nil),   // 1: dto.common.Metrics
+	(*StartTestRequest)(nil),  // 0: dto.agent.StartTestRequest
+	(*GetStatusRequest)(nil),  // 1: dto.agent.GetStatusRequest
+	(*GetStatusResponse)(nil), // 2: dto.agent.GetStatusResponse
+	(*common.Metrics)(nil),    // 3: dto.common.Metrics
 }
 var file_agent_proto_depIdxs = []int32{
 	0, // 0: dto.agent.AgentService.StartTest:input_type -> dto.agent.StartTestRequest
-	1, // 1: dto.agent.AgentService.StartTest:output_type -> dto.common.Metrics
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
+	1, // 1: dto.agent.AgentService.GetStatus:input_type -> dto.agent.GetStatusRequest
+	3, // 2: dto.agent.AgentService.StartTest:output_type -> dto.common.Metrics
+	2, // 3: dto.agent.AgentService.GetStatus:output_type -> dto.agent.GetStatusResponse
+	2, // [2:4] is the sub-list for method output_type
+	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -141,7 +238,7 @@ func file_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_proto_rawDesc), len(file_agent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

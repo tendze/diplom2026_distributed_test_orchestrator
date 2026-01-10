@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent"
 	commonpb "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/common"
 )
@@ -26,7 +28,7 @@ func (s *AgentService) StartTest(
 
 	runner := NewHTTPRunner(req.Url)
 	limiter := NewRateLimiter(int(req.Rps))
-	metrics := NewLocalMetrics() 
+	metrics := NewLocalMetrics()
 
 	// Динамический расчет воркеров
 	// Если RPS маленький (например 10), запустим 5 воркеров.
@@ -57,6 +59,24 @@ func (s *AgentService) StartTest(
 	return nil
 }
 
+func (s *AgentService) GetStatus(ctx context.Context, req *agent.GetStatusRequest) (*agent.GetStatusResponse, error) {
+	cores, err := cpu.Counts(true)
+	if err != nil {
+		cores = 1
+	}
+
+	vMem, err := mem.VirtualMemory()
+	totalMem := uint64(0)
+	if err == nil {
+		totalMem = vMem.Total
+	}
+
+	return &agent.GetStatusResponse{
+		CpuCores:    int32(cores),
+		TotalMemory: totalMem,
+	}, nil
+}
+
 func (s *AgentService) runLoad(ctx context.Context, runner *HTTPRunner, limiter *RateLimiter, metrics *LocalMetrics) {
 	for {
 		select {
@@ -66,7 +86,7 @@ func (s *AgentService) runLoad(ctx context.Context, runner *HTTPRunner, limiter 
 			limiter.Wait(ctx)
 
 			status, latency, err := runner.DoRequest()
-			
+
 			metrics.Add(status, latency, err)
 		}
 	}

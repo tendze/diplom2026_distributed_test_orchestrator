@@ -7,6 +7,7 @@ option go_package = "github.com/tendze/diplom2026_distributed_test_orchestrator/
 
 service AgentService {
   rpc StartTest(StartTestRequest) returns (stream dto.common.Metrics);
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
 }
 
 message StartTestRequest {
@@ -14,4 +15,11 @@ message StartTestRequest {
   string url = 2;
   int32 rps = 3;
   int32 duration_seconds = 4;
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  int32 cpu_cores = 1;
+  uint64 total_memory = 2;
 }

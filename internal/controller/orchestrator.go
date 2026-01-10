@@ -34,6 +34,7 @@ func (o *Orchestrator) Start(ctx context.Context, testID, targetURL string, tota
 
 	for _, addr := range o.agentAddrs {
 		wg.Add(1)
+		// TODO: strict / any check
 		go func(address string) {
 			defer wg.Done()
 			if err := o.manageAgentLifecycle(ctx, testID, address, targetURL, rpsPerAgent, duration); err != nil {
