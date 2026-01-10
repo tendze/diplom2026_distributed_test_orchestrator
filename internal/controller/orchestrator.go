@@ -3,11 +3,17 @@ package controller
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
+	"time"
 
 	agentpb "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+)
+
+const (
+	AvailabilityCheckingTimeout = 3 * time.Second
 )
 
 // Orchestrator выполняет функции управления распределенным тестированием.
@@ -24,33 +30,67 @@ func NewOrchestrator(addrs []string, metrics *AggregatedMetrics) *Orchestrator {
 	}
 }
 
+// TestRunRequest группирует параметры запуска теста.
+type TestRunRequest struct {
+	TestID          string
+	URL             string
+	TargetRPS       int32
+	DurationSeconds int32
+}
+
+type agentHandle struct {
+	addr  string
+	cores int32
+}
+
 // Start запускает процесс распределенного тестирования на всех настроенных агентах.
-func (o *Orchestrator) Start(ctx context.Context, testID, targetURL string, totalRPS int32, duration int32) error {
-	// Расчет RPS на одного агента (базовая реализация равного распределения)
-	rpsPerAgent := totalRPS / int32(len(o.agentAddrs))
+func (o *Orchestrator) Start(ctx context.Context, mode string, req TestRunRequest) error {
+	var activeAgents []agentHandle
+	var totalCores int32
+
+	// 1. Стадия Discovery и Валидация режима
+	for _, addr := range o.agentAddrs {
+		handle, err := o.pingAgent(ctx, addr)
+		if err != nil {
+			if mode == "strict" {
+				return fmt.Errorf("strict mode violation: agent %s is unreachable: %w", addr, err)
+			}
+			log.Printf("Agent %s skipped (any mode): %v", addr, err)
+			continue
+		}
+		activeAgents = append(activeAgents, *handle)
+		totalCores += handle.cores
+	}
+
+	// Проверка на наличие хотя бы одного живого агента
+	if len(activeAgents) == 0 {
+		return fmt.Errorf("no available agents to run the test")
+	}
 
 	var wg sync.WaitGroup
-	errChan := make(chan error, len(o.agentAddrs))
 
-	for _, addr := range o.agentAddrs {
+	for _, agent := range activeAgents {
+		// Вес агента = его ядра / суммарные ядра
+		weight := float64(agent.cores) / float64(totalCores)
+		agentRPS := int32(float64(req.TargetRPS) * weight)
+		
+		if agentRPS == 0 {
+			agentRPS = 1 // Гарантируем минимальную нагрузку
+		}
+
+		// Воркер нагрузки и отправки метрик
 		wg.Add(1)
-		// TODO: strict / any check
-		go func(address string) {
+		go func(a agentHandle, rps int32) {
 			defer wg.Done()
-			if err := o.manageAgentLifecycle(ctx, testID, address, targetURL, rpsPerAgent, duration); err != nil {
-				errChan <- fmt.Errorf("agent %s error: %w", address, err)
+			err := o.manageAgentLifecycle(ctx, req.TestID, a.addr, req.URL, rps, req.DurationSeconds)
+			if err != nil {
+				log.Printf("Agent %s stream error: %v", a.addr, err)
 			}
-		}(addr)
+		}(agent, agentRPS)
 	}
 
 	// Ожидание завершения всех потоков метрик
 	wg.Wait()
-	close(errChan)
-
-	if len(errChan) > 0 {
-		return <-errChan
-	}
-
 	return nil
 }
 
@@ -97,4 +137,35 @@ func (o *Orchestrator) manageAgentLifecycle(ctx context.Context, testID, addr, u
 			)
 		}
 	}
+}
+
+// pingAgent выполняет предварительную проверку доступности и мощностей агента.
+func (o *Orchestrator) pingAgent(ctx context.Context, addr string) (*agentHandle, error) {
+	// Контекст для отмены проверки доступности
+	pingCtx, cancel := context.WithTimeout(ctx, AvailabilityCheckingTimeout)
+	defer cancel()
+
+	// DialContext для соблюдения таймаута
+	// WithBlock() заставляет Dial ждать реального установления соединения
+	conn, err := grpc.DialContext(pingCtx, addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("connection failed: %w", err)
+	}
+	defer conn.Close()
+
+	client := agentpb.NewAgentServiceClient(conn)
+	
+	// Сбор системных характеристик агента
+	status, err := client.GetStatus(pingCtx, &agentpb.GetStatusRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status: %w", err)
+	}
+
+	return &agentHandle{
+		addr:  addr,
+		cores: status.CpuCores,
+	}, nil
 }
