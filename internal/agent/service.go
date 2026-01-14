@@ -37,6 +37,22 @@ func (s *AgentService) StartTest(
 
 	log.Printf("Starting test: ID=%s, RPS=%d, Workers=%d\n", req.TestId, req.Rps, workerCount)
 
+	// Учитываем время старта теста, указанный контроллером
+	// для синхронизированного старта
+	startAt := time.UnixMilli(req.StartAtUnixMs)
+	delay := time.Until(startAt)
+	if delay > 0 {
+		log.Printf("Waiting %v for synchronized start...", delay)
+
+		// Прерываемое ожидание
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			log.Println("Test cancelled by by context")
+			return ctx.Err()
+		}
+	}
+
 	var wg sync.WaitGroup
 
 	for i := 0; i < workerCount; i++ {

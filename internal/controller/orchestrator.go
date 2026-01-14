@@ -14,6 +14,7 @@ import (
 
 const (
 	AvailabilityCheckingTimeout = 3 * time.Second
+	SyncStartDuration           = 2 * time.Second
 )
 
 // Orchestrator выполняет функции управления распределенным тестированием.
@@ -67,6 +68,9 @@ func (o *Orchestrator) Start(ctx context.Context, mode string, req TestRunReques
 		return fmt.Errorf("no available agents to run the test")
 	}
 
+	// Механизм гарантированного синхронного старта тестов
+	startTime := time.Now().Add(SyncStartDuration).UnixMilli()
+
 	var wg sync.WaitGroup
 
 	for _, agent := range activeAgents {
@@ -82,7 +86,15 @@ func (o *Orchestrator) Start(ctx context.Context, mode string, req TestRunReques
 		wg.Add(1)
 		go func(a agentHandle, rps int32) {
 			defer wg.Done()
-			err := o.manageAgentLifecycle(ctx, req.TestID, a.addr, req.URL, rps, req.DurationSeconds)
+			err := o.manageAgentLifecycle(
+				ctx,
+				req.TestID,
+				a.addr,
+				req.URL,
+				rps,
+				req.DurationSeconds,
+				startTime,
+			)
 			if err != nil {
 				log.Printf("Agent %s stream error: %v", a.addr, err)
 			}
@@ -95,7 +107,12 @@ func (o *Orchestrator) Start(ctx context.Context, mode string, req TestRunReques
 }
 
 // manageAgentLifecycle управляет соединением и приемом данных от конкретного агента.
-func (o *Orchestrator) manageAgentLifecycle(ctx context.Context, testID, addr, url string, rps, duration int32) error {
+func (o *Orchestrator) manageAgentLifecycle(
+	ctx context.Context,
+	testID, addr, url string,
+	rps, duration int32,
+	startTimeUnix int64,
+) error {
 	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return err
@@ -108,6 +125,7 @@ func (o *Orchestrator) manageAgentLifecycle(ctx context.Context, testID, addr, u
 		Url:             url,
 		Rps:             rps,
 		DurationSeconds: duration,
+		StartAtUnixMs:   startTimeUnix,
 	})
 	if err != nil {
 		return err
@@ -163,8 +181,6 @@ func (o *Orchestrator) pingAgent(ctx context.Context, addr string) (*agentHandle
 	if err != nil {
 		return nil, fmt.Errorf("failed to get status: %w", err)
 	}
-
-	fmt.Println()
 
 	return &agentHandle{
 		addr:  addr,
