@@ -73,7 +73,7 @@ func (o *Orchestrator) Start(ctx context.Context, mode string, req TestRunReques
 		// Вес агента = его ядра / суммарные ядра
 		weight := float64(agent.cores) / float64(totalCores)
 		agentRPS := int32(float64(req.TargetRPS) * weight)
-		
+
 		if agentRPS == 0 {
 			agentRPS = 1 // Гарантируем минимальную нагрузку
 		}
@@ -157,12 +157,14 @@ func (o *Orchestrator) pingAgent(ctx context.Context, addr string) (*agentHandle
 	defer conn.Close()
 
 	client := agentpb.NewAgentServiceClient(conn)
-	
+
 	// Сбор системных характеристик агента
 	status, err := client.GetStatus(pingCtx, &agentpb.GetStatusRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get status: %w", err)
 	}
+
+	fmt.Println()
 
 	return &agentHandle{
 		addr:  addr,

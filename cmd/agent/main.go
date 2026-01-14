@@ -21,24 +21,31 @@ func main() {
 	listenOverride := flag.String("listen", "", "override listen address (e.g. :9001)")
 	flag.Parse()
 
+	// Инициализируем логгер
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	slog.SetDefault(logger)
+
 	// Загрузка конфигурации
-	cfg, err := config.Load[config.AgentConfig](*configPath)
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+	var cfg *config.AgentConfig
+
+	if _, err := os.Stat(*configPath); err == nil {
+		cfg, err = config.Load[config.AgentConfig](*configPath)
+		if err != nil {
+			log.Fatalf("Failed to load configuration: %v", err)
+		}
+	} else {
+		logger.Warn("config file not found, using defaults")
+		cfg = config.DefaultAgentConfig()
 	}
 
 	if *listenOverride != "" {
 		cfg.Agent.Listen = *listenOverride
 	}
 
-	// Инициализируем красивый логгер
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	slog.SetDefault(logger)
-
 	addr := cfg.Agent.Listen
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		slog.Error("failed to listen", "error", err)
+		logger.Error("Failed to listen", slog.String("err", err.Error()))
 		os.Exit(1)
 	}
 
@@ -50,15 +57,15 @@ func main() {
 	defer stop()
 
 	go func() {
-		slog.Info("agent server starting", "addr", addr)
+		logger.Info("agent server starting", slog.String("addr", addr))
 		if err := s.Serve(lis); err != nil {
-			slog.Error("failed to serve", "error", err)
+			logger.Error("failed to serve", slog.String("err", err.Error()))
 		}
 	}()
 
 	<-ctx.Done()
 
-	slog.Info("shutting down agent server gracefully...")
+	logger.Info("shutting down agent server gracefully...")
 	s.GracefulStop()
-	slog.Info("agent stopped")
+	logger.Info("agent stopped")
 }

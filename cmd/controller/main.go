@@ -36,13 +36,18 @@ func main() {
 
 	log.Printf("Starting distributed test: URL=%s, TargetRPS=%d", cfg.Test.URL, cfg.Test.TargetRPS)
 
+	runRequest := controller.TestRunRequest{
+		TestID:          cfg.Test.ID,
+		URL:             cfg.Test.URL,
+		TargetRPS:       cfg.Test.TargetRPS,
+		DurationSeconds: cfg.Test.DurationSeconds,
+	}
+
 	// Запуск теста
 	err = orchestrator.Start(
 		ctx,
-		cfg.Test.ID,
-		cfg.Test.URL,
-		cfg.Test.TargetRPS,
-		cfg.Test.DurationSeconds,
+		cfg.Agents.Mode,
+		runRequest,
 	)
 
 	if err != nil {
