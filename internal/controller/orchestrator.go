@@ -69,6 +69,7 @@ func (o *Orchestrator) Start(ctx context.Context, mode string, req TestRunReques
 	}
 
 	// Механизм гарантированного синхронного старта тестов
+	// Устанавливаем время старта теста now() + SyncStartDuration
 	startTime := time.Now().Add(SyncStartDuration).UnixMilli()
 
 	var wg sync.WaitGroup

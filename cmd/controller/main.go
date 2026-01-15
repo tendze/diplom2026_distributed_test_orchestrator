@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,10 +17,20 @@ func main() {
 	configPath := flag.String("config", "controller.yaml", "Path to controller configuration file")
 	flag.Parse()
 
+	// Инициализируем логгер
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	slog.SetDefault(logger)
+
 	// Загрузка конфигурации
 	cfg, err := config.Load[config.ControllerConfig](*configPath)
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		logger.Error("failed to load configuration", slog.String("err", err.Error()))
+		return
+	}
+
+	if err = cfg.Validate(); err != nil {
+		logger.Error("invalid config format", slog.String("err", err.Error()))
+		return
 	}
 
 	// Инициализация агрегатора метрик

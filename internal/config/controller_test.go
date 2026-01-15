@@ -34,3 +34,83 @@ test:
 	require.Equal(t, "tbank.ru/host-machine/agent1", cfg.Agents.Targets[1])
 	require.Equal(t, int32(100), cfg.Test.TargetRPS)
 }
+
+func TestValidateControllerConfig(t *testing.T) {
+	validConfig := func() ControllerConfig {
+		return ControllerConfig{
+			Agents: AgentsSection{
+				Mode:    "strict",
+				Targets: []string{"agent1"},
+			},
+			Test: TestSection{
+				ID:              "test-1",
+				URL:             "http://example.com",
+				TargetRPS:       10,
+				DurationSeconds: 10,
+			},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		modify  func(*ControllerConfig)
+		wantErr error
+	}{
+		{
+			name: "valid config",
+			modify: func(c *ControllerConfig) {
+			},
+			wantErr: nil,
+		},
+		{
+			name: "invalid mode",
+			modify: func(c *ControllerConfig) {
+				c.Agents.Mode = "wrong"
+			},
+			wantErr: InvalidModeError,
+		},
+		{
+			name: "missing ulr",
+			modify: func(c *ControllerConfig) {
+				c.Test.URL = ""
+			},
+			wantErr: MissingURLError,
+		},
+		{
+			name: "invalid url",
+			modify: func(c *ControllerConfig) {
+				c.Test.URL = ":::bad_url"
+			},
+			wantErr: InvalidURL,
+		},
+		{
+			name: "invalid rps",
+			modify: func(c *ControllerConfig) {
+				c.Test.TargetRPS = 0
+			},
+			wantErr: InvalidRPSValueError,
+		},
+		{
+			name: "invalid duration",
+			modify: func(c *ControllerConfig) {
+				c.Test.DurationSeconds = 1
+			},
+			wantErr: InvalidDurationValueError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			tt.modify(&cfg)
+
+			err := cfg.Validate()
+
+			if tt.wantErr == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tt.wantErr)
+			}
+		})
+	}
+}

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
 	"log/slog"
 	"net"
 	"os"
@@ -31,7 +30,8 @@ func main() {
 	if _, err := os.Stat(*configPath); err == nil {
 		cfg, err = config.Load[config.AgentConfig](*configPath)
 		if err != nil {
-			log.Fatalf("Failed to load configuration: %v", err)
+			logger.Error("failed to load configuration", slog.String("err", err.Error()))
+			return
 		}
 	} else {
 		logger.Warn("config file not found, using defaults")
@@ -42,12 +42,19 @@ func main() {
 		cfg.Agent.Listen = *listenOverride
 	}
 
+	if err := cfg.Validate(); err != nil {
+		logger.Error("invalid config format", slog.String("err", err.Error()))
+		return
+	}
+
 	addr := cfg.Agent.Listen
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		logger.Error("Failed to listen", slog.String("err", err.Error()))
+		logger.Error("failed to listen", slog.String("err", err.Error()))
 		os.Exit(1)
 	}
+
+	// Сервер
 
 	s := grpc.NewServer()
 
