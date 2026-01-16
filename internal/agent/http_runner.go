@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"io"
 	"net/http"
 	"time"
 )
@@ -17,28 +18,33 @@ func NewHTTPRunner(url string) *HTTPRunner {
 		MaxIdleConnsPerHost: 1000,
 		IdleConnTimeout:     90 * time.Second,
 	}
-	
+
 	return &HTTPRunner{
 		client: &http.Client{Transport: t, Timeout: 10 * time.Second},
-		url: url,
+		url:    url,
 	}
 }
 
-func (r *HTTPRunner) DoRequest() (status int, latency time.Duration, err error) {
+func (r *HTTPRunner) DoRequest() (status int, latency time.Duration, size uint64, err error) {
 	start := time.Now()
 
 	req, err := http.NewRequest(http.MethodGet, r.url, nil)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	resp, err := r.client.Do(req)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	defer resp.Body.Close()
 
 	latency = time.Since(start)
 
-	return resp.StatusCode, latency, nil
+	n, err := io.Copy(io.Discard, resp.Body)
+	if err != nil {
+		return resp.StatusCode, 0, 0, err
+	}
+
+	return resp.StatusCode, latency, uint64(n), nil
 }

@@ -34,6 +34,7 @@ type Metrics struct {
 	Req_5Xx int64 `protobuf:"varint,8,opt,name=req_5xx,json=req5xx,proto3" json:"req_5xx,omitempty"`
 	// Гистограмма: ключ - latency в мс (верхняя граница), значение - кол-во запросов
 	Buckets       map[int32]int64 `protobuf:"bytes,9,rep,name=buckets,proto3" json:"buckets,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	BytesCount    uint64          `protobuf:"varint,10,opt,name=bytes_count,json=bytesCount,proto3" json:"bytes_count,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -131,12 +132,19 @@ func (x *Metrics) GetBuckets() map[int32]int64 {
 	return nil
 }
 
+func (x *Metrics) GetBytesCount() uint64 {
+	if x != nil {
+		return x.BytesCount
+	}
+	return 0
+}
+
 var File_common_proto protoreflect.FileDescriptor
 
 const file_common_proto_rawDesc = "" +
 	"\n" +
 	"\fcommon.proto\x12\n" +
-	"dto.common\"\xbc\x02\n" +
+	"dto.common\"\xdd\x02\n" +
 	"\aMetrics\x12\x10\n" +
 	"\x03rps\x18\x01 \x01(\x01R\x03rps\x12\x12\n" +
 	"\x04sent\x18\x02 \x01(\x03R\x04sent\x12\x16\n" +
@@ -146,7 +154,10 @@ const file_common_proto_rawDesc = "" +
 	"\areq_3xx\x18\x06 \x01(\x03R\x06req3xx\x12\x17\n" +
 	"\areq_4xx\x18\a \x01(\x03R\x06req4xx\x12\x17\n" +
 	"\areq_5xx\x18\b \x01(\x03R\x06req5xx\x12:\n" +
-	"\abuckets\x18\t \x03(\v2 .dto.common.Metrics.BucketsEntryR\abuckets\x1a:\n" +
+	"\abuckets\x18\t \x03(\v2 .dto.common.Metrics.BucketsEntryR\abuckets\x12\x1f\n" +
+	"\vbytes_count\x18\n" +
+	" \x01(\x04R\n" +
+	"bytesCount\x1a:\n" +
 	"\fBucketsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01BNZLgithub.com/tendze/diplom2026_distributed_test_orchestrator/gen/common;commonb\x06proto3"

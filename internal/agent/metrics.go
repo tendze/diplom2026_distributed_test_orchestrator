@@ -13,6 +13,7 @@ type LocalMetrics struct {
 
 	Sent           int64
 	Failed         int64
+	BytesSent      uint64
 	StatusCounters [5]int64 // 1xx, 2xx, 3xx, 4xx, 5xx
 
 	// Храним счетчики по корзинам
@@ -29,7 +30,7 @@ func NewLocalMetrics() *LocalMetrics {
 	return m
 }
 
-func (m *LocalMetrics) Add(status int, latency time.Duration, err error) {
+func (m *LocalMetrics) Add(status int, latency time.Duration, bytesSent uint64, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -38,6 +39,8 @@ func (m *LocalMetrics) Add(status int, latency time.Duration, err error) {
 		m.Failed++
 		return
 	}
+
+	m.BytesSent += bytesSent
 
 	ms := int32(latency.Milliseconds())
 	for _, b := range defaultBuckets {
@@ -54,7 +57,7 @@ func (m *LocalMetrics) Add(status int, latency time.Duration, err error) {
 }
 
 func (m *LocalMetrics) Snapshot() (
-	sent, failed int64,
+	sent, failed int64, bytesSent uint64,
 	statuses [5]int64,
 	buckets map[int32]int64,
 ) {
@@ -69,11 +72,10 @@ func (m *LocalMetrics) Snapshot() (
 
 	sent, failed = m.Sent, m.Failed
 	statuses = m.StatusCounters
+	bytesSent = m.BytesSent
 
-	m.Sent, m.Failed = 0, 0
+	m.Sent, m.Failed, m.BytesSent = 0, 0, 0
 	m.StatusCounters = [5]int64{}
 
 	return
 }
-
-

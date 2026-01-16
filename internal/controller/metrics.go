@@ -15,6 +15,7 @@ type AggregatedMetrics struct {
 	Req5XX      int64
 	totalSent   int64
 	totalFailed int64
+	totalBytes  uint64
 	buckets     map[int32]int64
 }
 
@@ -28,7 +29,7 @@ func NewAggregatedMetrics() *AggregatedMetrics {
 // Merge выполняет атомарное сложение метрик, полученных от агентов.
 func (am *AggregatedMetrics) Merge(
 	sent,
-	failed int64,
+	failed int64, bytesSent uint64,
 	req1xx, req2xx, req3xx, req4xx, req5xx int64,
 	agentBuckets map[int32]int64,
 ) {
@@ -43,6 +44,7 @@ func (am *AggregatedMetrics) Merge(
 
 	am.totalSent += sent
 	am.totalFailed += failed
+	am.totalBytes += bytesSent
 
 	for b, count := range agentBuckets {
 		am.buckets[b] += count

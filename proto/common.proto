@@ -18,4 +18,6 @@ message Metrics {
 
   // Гистограмма: ключ - latency в мс (верхняя граница), значение - кол-во запросов
   map<int32, int64> buckets = 9;
+
+  uint64 bytes_count = 10;
 }

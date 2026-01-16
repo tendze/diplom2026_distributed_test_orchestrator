@@ -147,6 +147,7 @@ func (o *Orchestrator) manageAgentLifecycle(
 			o.metrics.Merge(
 				msg.Sent,
 				msg.Failed,
+				msg.BytesCount,
 				msg.Req_1Xx,
 				msg.Req_2Xx,
 				msg.Req_3Xx,

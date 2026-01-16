@@ -55,6 +55,9 @@ func (s *AgentService) StartTest(
 
 	var wg sync.WaitGroup
 
+	// Сливаем токены, чтобы первую секунду не было 2x rps
+	limiter.bucket.TakeAvailable(limiter.bucket.Available())
+
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
 		go func() {
@@ -101,9 +104,9 @@ func (s *AgentService) runLoad(ctx context.Context, runner *HTTPRunner, limiter 
 		default:
 			limiter.Wait(ctx)
 
-			status, latency, err := runner.DoRequest()
+			status, latency, bytesSent, err := runner.DoRequest()
 
-			metrics.Add(status, latency, err)
+			metrics.Add(status, latency, bytesSent, err)
 		}
 	}
 }
@@ -117,19 +120,22 @@ func (s *AgentService) streamMetrics(ctx context.Context, metrics *LocalMetrics,
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			sent, failed, statuses, buckets := metrics.Snapshot()
+			sent, failed, bytesSent, statuses, buckets := metrics.Snapshot()
 
-			err := stream.Send(&commonpb.Metrics{
-				Rps:     float64(sent),
-				Sent:    sent,
-				Failed:  failed,
-				Req_1Xx: statuses[0],
-				Req_2Xx: statuses[1],
-				Req_3Xx: statuses[2],
-				Req_4Xx: statuses[3],
-				Req_5Xx: statuses[4],
-				Buckets: buckets,
-			})
+			metrics := &commonpb.Metrics{
+				Rps:        float64(sent),
+				Sent:       sent,
+				Failed:     failed,
+				BytesCount: bytesSent,
+				Req_1Xx:    statuses[0],
+				Req_2Xx:    statuses[1],
+				Req_3Xx:    statuses[2],
+				Req_4Xx:    statuses[3],
+				Req_5Xx:    statuses[4],
+				Buckets:    buckets,
+			}
+
+			err := stream.Send(metrics)
 			if err != nil {
 				return
 			}
