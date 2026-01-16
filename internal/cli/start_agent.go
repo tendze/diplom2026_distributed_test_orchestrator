@@ -1,25 +1,38 @@
-package main
+package cli
 
 import (
 	"context"
-	"flag"
 	"log/slog"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/spf13/cobra"
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent"
 	agentservice "github.com/tendze/diplom2026_distributed_test_orchestrator/internal/agent"
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/config"
 	"google.golang.org/grpc"
 )
 
-func main() {
-	configPath := flag.String("config", "agent.yaml", "Path to agent configuration file")
-	listenOverride := flag.String("listen", "", "override listen address (e.g. :9001)")
-	flag.Parse()
+var (
+	agentConfig string
+	agentListen string
+)
 
+var startAgentCmd = &cobra.Command{
+	Use:   "agent",
+	Short: "Run a DTO agent",
+	Run:   startAgent,
+}
+
+func init() {
+	startAgentCmd.Flags().StringVar(&agentConfig, "config", "agent.yaml", "Path to agent config")
+	startAgentCmd.Flags().StringVar(&agentListen, "listen", "", "Override listen address")
+	startCmd.AddCommand(startAgentCmd)
+}
+
+func startAgent(cmd *cobra.Command, args []string) {
 	// Инициализируем логгер
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	slog.SetDefault(logger)
@@ -27,8 +40,8 @@ func main() {
 	// Загрузка конфигурации
 	var cfg *config.AgentConfig
 
-	if _, err := os.Stat(*configPath); err == nil {
-		cfg, err = config.Load[config.AgentConfig](*configPath)
+	if _, err := os.Stat(agentConfig); err == nil {
+		cfg, err = config.Load[config.AgentConfig](agentConfig)
 		if err != nil {
 			logger.Error("failed to load configuration", slog.String("err", err.Error()))
 			return
@@ -38,8 +51,8 @@ func main() {
 		cfg = config.DefaultAgentConfig()
 	}
 
-	if *listenOverride != "" {
-		cfg.Agent.Listen = *listenOverride
+	if agentListen != "" {
+		cfg.Agent.Listen = agentListen
 	}
 
 	if err := cfg.Validate(); err != nil {

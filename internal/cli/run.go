@@ -1,28 +1,36 @@
-package main
+package cli
 
 import (
 	"context"
-	"flag"
-	"log"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/spf13/cobra"
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/config"
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/controller"
 )
 
-func main() {
-	configPath := flag.String("config", "controller.yaml", "Path to controller configuration file")
-	flag.Parse()
+var runTestCmd = &cobra.Command{
+	Use:   "run-test [scenario_file]",
+	Short: "Start the load test with controller",
+	Args:  cobra.ExactArgs(1),
+	Run:   runTest,
+}
 
+func init() {
+	rootCmd.AddCommand(runTestCmd)
+}
+
+func runTest(cmd *cobra.Command, args []string) {
+	testScenarioPath := args[0]
 	// Инициализируем логгер
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	slog.SetDefault(logger)
 
 	// Загрузка конфигурации
-	cfg, err := config.Load[config.ControllerConfig](*configPath)
+	cfg, err := config.Load[config.ControllerConfig](testScenarioPath)
 	if err != nil {
 		logger.Error("failed to load configuration", slog.String("err", err.Error()))
 		return
@@ -45,7 +53,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	log.Printf("Starting distributed test: URL=%s, TargetRPS=%d", cfg.Test.URL, cfg.Test.TargetRPS)
+	logger.Info("Starting distributed test", slog.String("test_id", cfg.Test.ID), slog.String("url", cfg.Test.URL), slog.Int("target_rps", int(cfg.Test.TargetRPS)))
 
 	runRequest := controller.TestRunRequest{
 		TestID:          cfg.Test.ID,
@@ -62,8 +70,8 @@ func main() {
 	)
 
 	if err != nil {
-		log.Fatalf("Test execution failed: %v", err)
+		logger.Error("Test execution failed: " + err.Error())
 	}
 
-	log.Println("Test completed successfully")
+	logger.Info("Test completed successfully", slog.String("test_id", cfg.Test.ID), slog.String("url", cfg.Test.URL), slog.Int("target_rps", int(cfg.Test.TargetRPS)))
 }
