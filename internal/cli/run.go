@@ -47,7 +47,7 @@ func runTest(cmd *cobra.Command, args []string) {
 	agentAddrs := cfg.Agents.Targets
 
 	// Инициализация оркестратора
-	orchestrator := controller.NewOrchestrator(agentAddrs, metrics)
+	orchestrator := controller.NewOrchestrator(agentAddrs, metrics, logger)
 
 	// Настройка контекста для корректного завершения (Graceful Shutdown)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -60,17 +60,24 @@ func runTest(cmd *cobra.Command, args []string) {
 		URL:             cfg.Test.URL,
 		TargetRPS:       cfg.Test.TargetRPS,
 		DurationSeconds: cfg.Test.DurationSeconds,
+		Workers:         cfg.Test.Workers,
 	}
 
-	// Запуск теста
-	err = orchestrator.Start(
-		ctx,
-		cfg.Agents.Mode,
-		runRequest,
-	)
+	if len(agentAddrs) == 0 {
+		// Нагрузочный тест в одиночку
+		err = orchestrator.StartSolo(ctx, runRequest)
+	} else {
+		// Запуск теста с агентами
+		err = orchestrator.StartTest(
+			ctx,
+			*cfg.Agents.Mode,
+			runRequest,
+		)
+	}
 
 	if err != nil {
 		logger.Error("Test execution failed: " + err.Error())
+		return
 	}
 
 	logger.Info("Test completed successfully", slog.String("test_id", cfg.Test.ID), slog.String("url", cfg.Test.URL), slog.Int("target_rps", int(cfg.Test.TargetRPS)))

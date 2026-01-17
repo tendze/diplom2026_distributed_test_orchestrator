@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"sync"
 	"time"
 
 	agentpb "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent"
+	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/engine"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -21,13 +23,16 @@ const (
 type Orchestrator struct {
 	agentAddrs []string
 	metrics    *AggregatedMetrics
+
+	log *slog.Logger
 }
 
 // NewOrchestrator создает новый экземпляр оркестратора.
-func NewOrchestrator(addrs []string, metrics *AggregatedMetrics) *Orchestrator {
+func NewOrchestrator(addrs []string, metrics *AggregatedMetrics, log *slog.Logger) *Orchestrator {
 	return &Orchestrator{
 		agentAddrs: addrs,
 		metrics:    metrics,
+		log:        log,
 	}
 }
 
@@ -37,6 +42,7 @@ type TestRunRequest struct {
 	URL             string
 	TargetRPS       int32
 	DurationSeconds int32
+	Workers         int32
 }
 
 type agentHandle struct {
@@ -45,7 +51,7 @@ type agentHandle struct {
 }
 
 // Start запускает процесс распределенного тестирования на всех настроенных агентах.
-func (o *Orchestrator) Start(ctx context.Context, mode string, req TestRunRequest) error {
+func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRequest) error {
 	var activeAgents []agentHandle
 	var totalCores int32
 
@@ -56,7 +62,7 @@ func (o *Orchestrator) Start(ctx context.Context, mode string, req TestRunReques
 			if mode == "strict" {
 				return fmt.Errorf("strict mode violation: agent %s is unreachable: %w", addr, err)
 			}
-			log.Printf("Agent %s skipped (any mode): %v", addr, err)
+			o.log.Info("skipped agent (any mode)", slog.String("agent_addr", addr), slog.String("err", err.Error()))
 			continue
 		}
 		activeAgents = append(activeAgents, *handle)
@@ -87,7 +93,7 @@ func (o *Orchestrator) Start(ctx context.Context, mode string, req TestRunReques
 		wg.Add(1)
 		go func(a agentHandle, rps int32) {
 			defer wg.Done()
-			err := o.manageAgentLifecycle(
+			err := o.agentWorker(
 				ctx,
 				req.TestID,
 				a.addr,
@@ -107,8 +113,48 @@ func (o *Orchestrator) Start(ctx context.Context, mode string, req TestRunReques
 	return nil
 }
 
-// manageAgentLifecycle управляет соединением и приемом данных от конкретного агента.
-func (o *Orchestrator) manageAgentLifecycle(
+// StartSoloTest запускает процесс нагрузочного тестирования в одноузловом режиме.
+// Метод полностью повторяет жизненный цикл распределенного теста, но выполняет его
+// в рамках текущего процесса без использования внешних агентов.
+func (o *Orchestrator) StartSolo(ctx context.Context, req TestRunRequest) error {
+	workerCount := int(req.Workers)
+	if workerCount <= 0 {
+		// Ограничения для соло режима
+		workerCount = int(req.TargetRPS / 2)
+		if workerCount < 10 {
+			workerCount = 10
+		}
+		if workerCount > 500 {
+			workerCount = 500
+		}
+	}
+
+	testCtx, cancel := context.WithTimeout(ctx, time.Duration(req.DurationSeconds)*time.Second)
+	defer cancel()
+
+	o.log.Info("Starting solo test", slog.String("url", req.URL), slog.Int64("rps", int64(req.TargetRPS)), slog.Int("worker_count", workerCount))
+
+	runner := engine.NewHTTPRunner(req.URL)
+	limiter := engine.NewRateLimiter(int(req.TargetRPS))
+
+	// Чтобы не было лишних запросов
+	limiter.Drain()
+
+	var wg sync.WaitGroup
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			o.soloWorker(testCtx, limiter, runner)
+		}()
+	}
+
+	wg.Wait()
+	return nil
+}
+
+// agentWorker управляет соединением и приемом данных от конкретного агента.
+func (o *Orchestrator) agentWorker(
 	ctx context.Context,
 	testID, addr, url string,
 	rps, duration int32,
@@ -155,6 +201,26 @@ func (o *Orchestrator) manageAgentLifecycle(
 				msg.Req_5Xx,
 				msg.Buckets,
 			)
+		}
+	}
+}
+
+// soloWorker отвечает за стимуляцию нагрузки при запуске в соло
+func (o *Orchestrator) soloWorker(
+	ctx context.Context,
+	limiter *engine.RateLimiter,
+	httpRunner *engine.HTTPRunner,
+) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if err := limiter.Wait(ctx); err != nil {
+				return
+			}
+			status, latency, size, err := httpRunner.DoRequest()
+			o.metrics.Add(status, latency, size, err)
 		}
 	}
 }

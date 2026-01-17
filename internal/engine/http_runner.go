@@ -1,4 +1,4 @@
-package agent
+package engine
 
 import (
 	"io"
@@ -6,7 +6,9 @@ import (
 	"time"
 )
 
-// TODO: Прокомментируй
+// HTTPRunner инкапсулирует логику выполнения HTTP-запросов.
+// Использует переиспользуемый http.Client с настроенным Transport
+// для поддержки большого количества одновременных соединений (Connection Pooling).
 type HTTPRunner struct {
 	client *http.Client
 	url    string
@@ -25,6 +27,7 @@ func NewHTTPRunner(url string) *HTTPRunner {
 	}
 }
 
+// DoRequest выполняет одиночный HTTP GET запрос и возвращает метрики ответа.
 func (r *HTTPRunner) DoRequest() (status int, latency time.Duration, size uint64, err error) {
 	start := time.Now()
 

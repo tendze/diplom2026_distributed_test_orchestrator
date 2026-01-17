@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,10 +37,11 @@ test:
 }
 
 func TestValidateControllerConfig(t *testing.T) {
+
 	validConfig := func() ControllerConfig {
 		return ControllerConfig{
 			Agents: AgentsSection{
-				Mode:    "strict",
+				Mode:    lo.ToPtr("strict"),
 				Targets: []string{"agent1"},
 			},
 			Test: TestSection{
@@ -65,9 +67,16 @@ func TestValidateControllerConfig(t *testing.T) {
 		{
 			name: "invalid mode",
 			modify: func(c *ControllerConfig) {
-				c.Agents.Mode = "wrong"
+				c.Agents.Mode = lo.ToPtr("wrong")
 			},
 			wantErr: InvalidModeError,
+		},
+		{
+			name: "missing mode",
+			modify: func(c *ControllerConfig) {
+				c.Agents.Mode = nil
+			},
+			wantErr: nil,
 		},
 		{
 			name: "missing ulr",

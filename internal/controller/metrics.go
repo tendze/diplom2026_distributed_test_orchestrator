@@ -3,7 +3,11 @@ package controller
 import (
 	"sort"
 	"sync"
+	"time"
 )
+
+// Стандартные границы корзин в миллисекундах (как в Prometheus)
+var defaultBuckets = []int32{5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000}
 
 // AggregatedMetrics обеспечивает потокобезопасный сбор результатов тестирования.
 type AggregatedMetrics struct {
@@ -13,6 +17,7 @@ type AggregatedMetrics struct {
 	Req3XX      int64
 	Req4XX      int64
 	Req5XX      int64
+	OtherCodes  int64
 	totalSent   int64
 	totalFailed int64
 	totalBytes  uint64
@@ -23,6 +28,44 @@ type AggregatedMetrics struct {
 func NewAggregatedMetrics() *AggregatedMetrics {
 	return &AggregatedMetrics{
 		buckets: make(map[int32]int64),
+	}
+}
+
+// Add собирает метрики в соло запуске теста.
+func (m *AggregatedMetrics) Add(status int, latency time.Duration, bytesSent uint64, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.totalSent++
+	if err != nil {
+		m.totalFailed++
+		return
+	}
+
+	m.totalBytes += bytesSent
+
+	ms := int32(latency.Milliseconds())
+	for _, b := range defaultBuckets {
+		if ms <= b {
+			m.buckets[b]++
+			break
+		}
+	}
+
+	code := status / 100
+	switch code {
+	case 1:
+		m.Req1XX++
+	case 2:
+		m.Req2XX++
+	case 3:
+		m.Req3XX++
+	case 4:
+		m.Req4XX++
+	case 5:
+		m.Req5XX++
+	default:
+		m.OtherCodes++
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent"
 	commonpb "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/common"
+	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/engine"
 )
 
 type AgentService struct {
@@ -26,8 +27,8 @@ func (s *AgentService) StartTest(
 	ctx, cancel := context.WithTimeout(stream.Context(), time.Duration(req.DurationSeconds)*time.Second)
 	defer cancel()
 
-	runner := NewHTTPRunner(req.Url)
-	limiter := NewRateLimiter(int(req.Rps))
+	runner := engine.NewHTTPRunner(req.Url)
+	limiter := engine.NewRateLimiter(int(req.Rps))
 	metrics := NewLocalMetrics()
 
 	// Динамический расчет воркеров
@@ -56,7 +57,7 @@ func (s *AgentService) StartTest(
 	var wg sync.WaitGroup
 
 	// Сливаем токены, чтобы первую секунду не было 2x rps
-	limiter.bucket.TakeAvailable(limiter.bucket.Available())
+	limiter.Drain()
 
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
@@ -74,6 +75,8 @@ func (s *AgentService) StartTest(
 	}()
 
 	wg.Wait()
+
+	// TODO: replace with slog
 	fmt.Printf("Test %s finished\n", req.TestId)
 	return nil
 }
@@ -96,7 +99,12 @@ func (s *AgentService) GetStatus(ctx context.Context, req *agent.GetStatusReques
 	}, nil
 }
 
-func (s *AgentService) runLoad(ctx context.Context, runner *HTTPRunner, limiter *RateLimiter, metrics *LocalMetrics) {
+func (s *AgentService) runLoad(
+	ctx context.Context,
+	runner *engine.HTTPRunner,
+	limiter *engine.RateLimiter,
+	metrics *LocalMetrics,
+) {
 	for {
 		select {
 		case <-ctx.Done():
