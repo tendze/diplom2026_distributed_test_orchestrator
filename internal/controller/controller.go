@@ -19,20 +19,20 @@ const (
 	SyncStartDuration           = 2 * time.Second
 )
 
-// Orchestrator выполняет функции управления распределенным тестированием.
+// Orchestrator выполняет функции управления распределенным и одиночным тестированием.
 type Orchestrator struct {
-	agentAddrs []string
-	metrics    *AggregatedMetrics
+	agents  *AgentMap
+	metrics *AggregatedMetrics
 
 	log *slog.Logger
 }
 
 // NewOrchestrator создает новый экземпляр оркестратора.
-func NewOrchestrator(addrs []string, metrics *AggregatedMetrics, log *slog.Logger) *Orchestrator {
+func NewOrchestrator(agentMap *AgentMap, metrics *AggregatedMetrics, log *slog.Logger) *Orchestrator {
 	return &Orchestrator{
-		agentAddrs: addrs,
-		metrics:    metrics,
-		log:        log,
+		agents:  agentMap,
+		metrics: metrics,
+		log:     log,
 	}
 }
 
@@ -56,13 +56,13 @@ func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRe
 	var totalCores int32
 
 	// 1. Стадия Discovery и Валидация режима
-	for _, addr := range o.agentAddrs {
-		handle, err := o.pingAgent(ctx, addr)
+	for _, agent := range o.agents.GetList() {
+		handle, err := o.pingAgent(ctx, agent.Address)
 		if err != nil {
 			if mode == "strict" {
-				return fmt.Errorf("strict mode violation: agent %s is unreachable: %w", addr, err)
+				return fmt.Errorf("strict mode violation: agent %s is unreachable: %w", agent.Address, err)
 			}
-			o.log.Info("skipped agent (any mode)", slog.String("agent_addr", addr), slog.String("err", err.Error()))
+			o.log.Info("skipped agent (any mode)", slog.String("agent_addr", agent.Address), slog.String("err", err.Error()))
 			continue
 		}
 		activeAgents = append(activeAgents, *handle)
@@ -116,23 +116,9 @@ func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRe
 // StartSoloTest запускает процесс нагрузочного тестирования в одноузловом режиме.
 // Метод полностью повторяет жизненный цикл распределенного теста, но выполняет его
 // в рамках текущего процесса без использования внешних агентов.
-func (o *Orchestrator) StartSolo(ctx context.Context, req TestRunRequest) error {
-	workerCount := int(req.Workers)
-	if workerCount <= 0 {
-		// Ограничения для соло режима
-		workerCount = int(req.TargetRPS / 2)
-		if workerCount < 10 {
-			workerCount = 10
-		}
-		if workerCount > 500 {
-			workerCount = 500
-		}
-	}
-
+func (o *Orchestrator) StartSolo(ctx context.Context, req *TestRunRequest) error {
 	testCtx, cancel := context.WithTimeout(ctx, time.Duration(req.DurationSeconds)*time.Second)
 	defer cancel()
-
-	o.log.Info("Starting solo test", slog.String("url", req.URL), slog.Int64("rps", int64(req.TargetRPS)), slog.Int("worker_count", workerCount))
 
 	runner := engine.NewHTTPRunner(req.URL)
 	limiter := engine.NewRateLimiter(int(req.TargetRPS))
@@ -141,7 +127,7 @@ func (o *Orchestrator) StartSolo(ctx context.Context, req TestRunRequest) error 
 	limiter.Drain()
 
 	var wg sync.WaitGroup
-	for i := 0; i < workerCount; i++ {
+	for i := int32(0); i < req.Workers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

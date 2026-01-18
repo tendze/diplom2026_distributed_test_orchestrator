@@ -95,10 +95,28 @@ func (am *AggregatedMetrics) Merge(
 }
 
 // GetSnapshot возвращает текущие накопленные показатели.
-func (am *AggregatedMetrics) GetSnapshot() (int64, int64) {
-	am.mu.RLock()
+func (am *AggregatedMetrics) GetSnapshot() MetricsSnapshot {
+	am.mu.RLock() // Блокируем только на чтение
 	defer am.mu.RUnlock()
-	return am.totalSent, am.totalFailed
+
+	// Копируем карту бакетов, чтобы избежать race condition при итерации в UI
+	bucketsCopy := make(map[int32]int64)
+	for k, v := range am.buckets {
+		bucketsCopy[k] = v
+	}
+
+	return MetricsSnapshot{
+		Req1XX:      am.Req1XX,
+		Req2XX:      am.Req2XX,
+		Req3XX:      am.Req3XX,
+		Req4XX:      am.Req4XX,
+		Req5XX:      am.Req5XX,
+		OtherCodes:  am.OtherCodes,
+		TotalSent:   am.totalSent,
+		TotalFailed: am.totalFailed,
+		TotalBytes:  am.totalBytes,
+		Buckets:     bucketsCopy,
+	}
 }
 
 // CalculatePercentile вычисляет значение перцентиля на основе агрегированной гистограммы.
@@ -134,4 +152,12 @@ func (am *AggregatedMetrics) CalculatePercentile(p float64) int32 {
 	}
 
 	return 0
+}
+
+// MetricsSnapshot — это слепок данных для отображения в UI
+type MetricsSnapshot struct {
+	Req1XX, Req2XX, Req3XX, Req4XX, Req5XX, OtherCodes int64
+	TotalSent, TotalFailed                             int64
+	TotalBytes                                         uint64
+	Buckets                                            map[int32]int64
 }

@@ -1,6 +1,6 @@
 package main
 
-import "github.com/tendze/diplom2026_distributed_test_orchestrator/internal/cli"
+import cli "github.com/tendze/diplom2026_distributed_test_orchestrator/internal/cli/cmd"
 
 func main() {
 	cli.Execute()

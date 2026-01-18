@@ -3,10 +3,11 @@ package config
 import "errors"
 
 var (
-	InvalidModeError          = errors.New("mode must be one of \"strict\" or \"any\"")
-	InvalidRPSValueError      = errors.New("target rps must be > 0")
-	InvalidDurationValueError = errors.New("test duration must be > 1 sec")
-	InvalidMissingModeError   = errors.New("missing mode for distributed test")
+	InvalidModeError                 = errors.New("mode must be one of \"strict\" or \"any\"")
+	InvalidRPSValueError             = errors.New("target rps must be > 0")
+	InvalidDurationValueError        = errors.New("test duration must be > 1 sec")
+	InvalidMissingModeError          = errors.New("missing mode for distributed test")
+	InvalidNegativeWorkersCountError = errors.New("workers count cant be negative")
 )
 
 type ControllerConfig struct {
@@ -43,6 +44,8 @@ func (cc *ControllerConfig) Validate() error {
 	if cc.Test.DurationSeconds <= 1 {
 		return InvalidDurationValueError
 	}
-
+	if cc.Test.Workers < 0 {
+		return InvalidNegativeWorkersCountError
+	}
 	return nil
 }
