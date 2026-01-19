@@ -89,8 +89,10 @@ func (r *CLIReporter) renderUI(snap controller.MetricsSnapshot, elapsed time.Dur
 		snap.Req4XX, snap.Req5XX, snap.OtherCodes,
 	)
 
-	res := fmt.Sprintf("%s %3.1f%% %v/%vs\n\n%s\n%s",
-		bar, percent, elapsed.Round(time.Second), totalDuration, statsTable, codes)
+	elapsedSec := int(elapsed.Seconds())
+
+	res := fmt.Sprintf("%s %3.1f%% %vs/%vs\n\n%s\n%s",
+		bar, percent, elapsedSec, totalDuration, statsTable, codes)
 
 	if isFinal {
 		p50 := r.metrics.CalculatePercentile(0.5)

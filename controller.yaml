@@ -1,5 +1,6 @@
 test:
   id: "test1"
   url: "http://localhost:8000"
-  target_rps: 10000
-  duration_seconds: 10
+  target_rps: 1000
+  duration_seconds: 70
+  workers: 1000

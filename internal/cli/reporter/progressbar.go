@@ -6,6 +6,7 @@ import (
 	"github.com/pterm/pterm"
 )
 
+// getProgressBarString возвращает progress bar в виде строки
 func getProgressBarString(percent int, width int) string {
 	// Количество закрашенных блоков
 	filled := (percent * width) / 100
