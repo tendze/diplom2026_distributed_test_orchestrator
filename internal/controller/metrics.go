@@ -11,23 +11,34 @@ var defaultBuckets = []int32{5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000}
 
 // AggregatedMetrics обеспечивает потокобезопасный сбор результатов тестирования.
 type AggregatedMetrics struct {
-	mu          sync.RWMutex
-	Req1XX      int64
-	Req2XX      int64
-	Req3XX      int64
-	Req4XX      int64
-	Req5XX      int64
-	OtherCodes  int64
+	mu sync.RWMutex
+
+	Req1XX     int64
+	Req2XX     int64
+	Req3XX     int64
+	Req4XX     int64
+	Req5XX     int64
+	OtherCodes int64
+
 	totalSent   int64
 	totalFailed int64
 	totalBytes  uint64
-	buckets     map[int32]int64
+
+	maxLatencyMs float64
+	minLatencyMs float64
+	avgLatencyMs float64
+
+	buckets map[int32]int64
+
+	StartTime time.Time
 }
 
 // NewAggregatedMetrics инициализирует структуру агрегированных метрик.
 func NewAggregatedMetrics() *AggregatedMetrics {
 	return &AggregatedMetrics{
-		buckets: make(map[int32]int64),
+		buckets:      make(map[int32]int64),
+		maxLatencyMs: -1,
+		minLatencyMs: -1,
 	}
 }
 
@@ -42,15 +53,32 @@ func (m *AggregatedMetrics) Add(status int, latency time.Duration, bytesSent uin
 		return
 	}
 
+	latencyMs := float64(latency.Microseconds()) / 1000.0
+
 	m.totalBytes += bytesSent
 
-	ms := int32(latency.Milliseconds())
+	ms := int32(latencyMs)
 	for _, b := range defaultBuckets {
 		if ms <= b {
 			m.buckets[b]++
 			break
 		}
 	}
+
+	// Обновляем максимальный latency
+	if m.maxLatencyMs == -1 || latencyMs > m.maxLatencyMs {
+		m.maxLatencyMs = latencyMs
+	}
+	// Обновляем минимальный latency
+	if m.minLatencyMs == -1 || latencyMs < m.minLatencyMs {
+		m.minLatencyMs = latencyMs
+	}
+
+	// Успешные запросы для среднего
+	successfulReqs := float64(m.totalSent - m.totalFailed)
+
+	// Расчёт средней задержки
+	m.avgLatencyMs = m.avgLatencyMs + (float64(latencyMs)-m.avgLatencyMs)/successfulReqs
 
 	code := status / 100
 	switch code {
@@ -106,16 +134,19 @@ func (am *AggregatedMetrics) GetSnapshot() MetricsSnapshot {
 	}
 
 	return MetricsSnapshot{
-		Req1XX:      am.Req1XX,
-		Req2XX:      am.Req2XX,
-		Req3XX:      am.Req3XX,
-		Req4XX:      am.Req4XX,
-		Req5XX:      am.Req5XX,
-		OtherCodes:  am.OtherCodes,
-		TotalSent:   am.totalSent,
-		TotalFailed: am.totalFailed,
-		TotalBytes:  am.totalBytes,
-		Buckets:     bucketsCopy,
+		Req1XX:       am.Req1XX,
+		Req2XX:       am.Req2XX,
+		Req3XX:       am.Req3XX,
+		Req4XX:       am.Req4XX,
+		Req5XX:       am.Req5XX,
+		OtherCodes:   am.OtherCodes,
+		TotalSent:    am.totalSent,
+		TotalFailed:  am.totalFailed,
+		TotalBytes:   am.totalBytes,
+		MaxLatencyMs: am.maxLatencyMs,
+		MinLatencyMs: am.minLatencyMs,
+		AvgLatencyMs: am.avgLatencyMs,
+		Buckets:      bucketsCopy,
 	}
 }
 
@@ -154,10 +185,20 @@ func (am *AggregatedMetrics) CalculatePercentile(p float64) int32 {
 	return 0
 }
 
+func (am *AggregatedMetrics) SetStartTime(newTime time.Time) {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
+	am.StartTime = newTime
+}
+
 // MetricsSnapshot — это слепок данных для отображения в UI
 type MetricsSnapshot struct {
 	Req1XX, Req2XX, Req3XX, Req4XX, Req5XX, OtherCodes int64
 	TotalSent, TotalFailed                             int64
 	TotalBytes                                         uint64
+	MaxLatencyMs                                       float64
+	MinLatencyMs                                       float64
+	AvgLatencyMs                                       float64
 	Buckets                                            map[int32]int64
 }

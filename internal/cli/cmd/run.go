@@ -2,7 +2,7 @@ package cli
 
 import (
 	"context"
-	"log/slog"
+	"fmt"
 	"os"
 	"os/signal"
 	"sync"
@@ -28,19 +28,16 @@ func init() {
 
 func runTest(cmd *cobra.Command, args []string) {
 	testScenarioPath := args[0]
-	// Инициализируем логгер
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	slog.SetDefault(logger)
 
 	// Загрузка конфигурации
 	cfg, err := config.Load[config.ControllerConfig](testScenarioPath)
 	if err != nil {
-		logger.Error("failed to load configuration", slog.String("err", err.Error()))
+		fmt.Printf("failed to load configuration: %s", err.Error())
 		return
 	}
 
 	if err = cfg.Validate(); err != nil {
-		logger.Error("invalid config format", slog.String("err", err.Error()))
+		fmt.Printf("invalid config format: %s", err.Error())
 		return
 	}
 
@@ -51,7 +48,7 @@ func runTest(cmd *cobra.Command, args []string) {
 	agentMap := controller.NewAgentMap(cfg.Agents.Targets)
 
 	// Инициализация оркестратора
-	orchestrator := controller.NewOrchestrator(agentMap, metrics, logger)
+	orchestrator := controller.NewOrchestrator(agentMap, metrics)
 
 	// Настройка контекста для корректного завершения (Graceful Shutdown) с сигналом
 	baseCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -72,16 +69,7 @@ func runTest(cmd *cobra.Command, args []string) {
 		Workers:         correctWorkers,
 	}
 
-	rep := reporter.NewCLIReporter(metrics, agentMap, runRequest, 200*time.Millisecond)
-
 	var wg sync.WaitGroup
-
-	// CLI
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		rep.StartLiveReporting(ctx, int(cfg.Test.DurationSeconds))
-	}()
 
 	wg.Add(1)
 	if agentMap.AgentsCount == 0 {
@@ -102,14 +90,24 @@ func runTest(cmd *cobra.Command, args []string) {
 		}()
 	}
 
+	// CLI
+	wg.Add(1)
+
+	rep := reporter.NewCLIReporter(metrics, agentMap, runRequest, 200*time.Millisecond)
+	go func() {
+		defer wg.Done()
+		rep.StartLiveReporting(ctx, int(cfg.Test.DurationSeconds))
+	}()
+
 	wg.Wait()
 
 	if err != nil {
-		logger.Error("Test execution failed: " + err.Error())
+		fmt.Printf("Test execution failed: %s", err.Error())
 		return
 	}
 }
 
+// recountWorkers пересчитывает количество воркеров, когда пользователь не указал своё количество
 func recountWorkers(customWorkers, targetRPS int32) int32 {
 	workerCount := customWorkers
 	if workerCount <= 0 {

@@ -1,6 +1,8 @@
+agents:
+  mode: "strict"
 test:
   id: "test1"
-  url: "http://localhost:8000"
+  url: "http://ya.ru"
   target_rps: 1000
-  duration_seconds: 70
-  workers: 1000
+  workers: 100
+  duration_seconds: 10

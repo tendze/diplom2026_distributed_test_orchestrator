@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -23,16 +22,13 @@ const (
 type Orchestrator struct {
 	agents  *AgentMap
 	metrics *AggregatedMetrics
-
-	log *slog.Logger
 }
 
 // NewOrchestrator создает новый экземпляр оркестратора.
-func NewOrchestrator(agentMap *AgentMap, metrics *AggregatedMetrics, log *slog.Logger) *Orchestrator {
+func NewOrchestrator(agentMap *AgentMap, metrics *AggregatedMetrics) *Orchestrator {
 	return &Orchestrator{
 		agents:  agentMap,
 		metrics: metrics,
-		log:     log,
 	}
 }
 
@@ -57,12 +53,12 @@ func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRe
 
 	// 1. Стадия Discovery и Валидация режима
 	for _, agent := range o.agents.GetList() {
-		handle, err := o.pingAgent(ctx, agent.Address)
+		handle, err := o.pingAgent(ctx, agent.GetAddress())
 		if err != nil {
 			if mode == "strict" {
-				return fmt.Errorf("strict mode violation: agent %s is unreachable: %w", agent.Address, err)
+				return fmt.Errorf("strict mode violation: agent %s is unreachable: %w", agent.GetAddress(), err)
 			}
-			o.log.Info("skipped agent (any mode)", slog.String("agent_addr", agent.Address), slog.String("err", err.Error()))
+			fmt.Printf("skipped agent (any mode). agent_addr=%s", agent.GetAddress())
 			continue
 		}
 		activeAgents = append(activeAgents, *handle)
