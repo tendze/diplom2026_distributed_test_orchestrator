@@ -23,6 +23,7 @@ type AgentInfo struct {
 	address string
 	status  string
 	sent    int64
+	failed  int64
 	cores   int32
 
 	mu sync.RWMutex
@@ -45,30 +46,37 @@ func (ai *AgentInfo) UpdateStatus(newStatus string) error {
 
 // GetAddress возвращает адрес агента
 func (ai *AgentInfo) GetAddress() string {
-    ai.mu.RLock()
-    defer ai.mu.RUnlock()
-    return ai.address
+	ai.mu.RLock()
+	defer ai.mu.RUnlock()
+	return ai.address
 }
 
 // GetStatus возвращает текущий статус агента
 func (ai *AgentInfo) GetStatus() string {
-    ai.mu.RLock()
-    defer ai.mu.RUnlock()
-    return ai.status
+	ai.mu.RLock()
+	defer ai.mu.RUnlock()
+	return ai.status
 }
 
 // GetSent возвращает количество отправленных запросов
 func (ai *AgentInfo) GetSent() int64 {
-    ai.mu.RLock()
-    defer ai.mu.RUnlock()
-    return ai.sent
+	ai.mu.RLock()
+	defer ai.mu.RUnlock()
+	return ai.sent
 }
 
+// GetFailed возвращает количество проваленных запросов
+func (ai *AgentInfo) GetFailed() int64 {
+	ai.mu.RLock()
+	defer ai.mu.RUnlock()
+	return ai.failed
+}
+ 
 // GetCores возвращает количество ядер
 func (ai *AgentInfo) GetCores() int32 {
-    ai.mu.RLock()
-    defer ai.mu.RUnlock()
-    return ai.cores
+	ai.mu.RLock()
+	defer ai.mu.RUnlock()
+	return ai.cores
 }
 
 type AgentMap struct {

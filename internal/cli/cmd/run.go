@@ -15,6 +15,8 @@ import (
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/controller"
 )
 
+var runTestMode string
+
 var runTestCmd = &cobra.Command{
 	Use:   "run-test [scenario_file]",
 	Short: "Start the load test with controller",
@@ -41,23 +43,22 @@ func runTest(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	runTestMode = "solo"
+	if len(cfg.Agents.Targets) > 0 {
+		runTestMode = "distributed"
+	}
+
 	// Инициализация агрегатора метрик
 	metrics := controller.NewAggregatedMetrics()
 
 	// Инициализация мапы для агентов
 	agentMap := controller.NewAgentMap(cfg.Agents.Targets)
 
+	// Инициализация оповещателя
+	testInfo := controller.NewTestInfo()
+
 	// Инициализация оркестратора
-	orchestrator := controller.NewOrchestrator(agentMap, metrics)
-
-	// Настройка контекста для корректного завершения (Graceful Shutdown) с сигналом
-	baseCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	// Настройка кондекста для корректного завершения с длительностью тестов
-	testDuration := time.Duration(cfg.Test.DurationSeconds) * time.Second
-	ctx, cancel := context.WithTimeout(baseCtx, testDuration)
-	defer cancel()
+	orchestrator := controller.NewOrchestrator(agentMap, metrics, testInfo)
 
 	correctWorkers := recountWorkers(cfg.Test.Workers, cfg.Test.TargetRPS)
 
@@ -69,31 +70,42 @@ func runTest(cmd *cobra.Command, args []string) {
 		Workers:         correctWorkers,
 	}
 
+	// Настройка контекста для корректного завершения (Graceful Shutdown) с сигналом
+	baseCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Настройка кондекста для корректного завершения с длительностью тестов
+	testDuration := countTestDuration(cfg.Test.DurationSeconds)
+	ctx, cancel := context.WithTimeout(baseCtx, testDuration)
+	defer cancel()
+
 	var wg sync.WaitGroup
 
+	// Тест
 	wg.Add(1)
-	if agentMap.AgentsCount == 0 {
-		// Нагрузочный тест в одиночку
-		go func() {
-			defer wg.Done()
-			err = orchestrator.StartSolo(ctx, &runRequest)
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if err != nil {
+				cancel()
+			}
 		}()
-	} else {
-		// Запуск теста с агентами
-		go func() {
-			defer wg.Done()
+		
+		if agentMap.AgentsCount == 0 {
+			err = orchestrator.StartSolo(ctx, &runRequest)
+		} else {
 			err = orchestrator.StartTest(
 				ctx,
 				*cfg.Agents.Mode,
 				runRequest,
 			)
-		}()
-	}
+		}
+	}()
 
 	// CLI
 	wg.Add(1)
 
-	rep := reporter.NewCLIReporter(metrics, agentMap, runRequest, 200*time.Millisecond)
+	rep := reporter.NewCLIReporter(metrics, agentMap, runRequest, testInfo, 200*time.Millisecond)
 	go func() {
 		defer wg.Done()
 		rep.StartLiveReporting(ctx, int(cfg.Test.DurationSeconds))
@@ -121,4 +133,14 @@ func recountWorkers(customWorkers, targetRPS int32) int32 {
 	}
 
 	return workerCount
+}
+
+// countTestDuration считает количество времени, нужного для выполнения теста
+// в зависимости от режима соло или распределённо
+func countTestDuration(testDuration int32) time.Duration {
+	if runTestMode == "solo" {
+		return time.Duration(testDuration) * time.Second
+	}
+
+	return time.Duration(testDuration)*time.Second + controller.SyncStartDuration
 }

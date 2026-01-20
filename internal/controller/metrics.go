@@ -29,8 +29,6 @@ type AggregatedMetrics struct {
 	avgLatencyMs float64
 
 	buckets map[int32]int64
-
-	StartTime time.Time
 }
 
 // NewAggregatedMetrics инициализирует структуру агрегированных метрик.
@@ -183,13 +181,6 @@ func (am *AggregatedMetrics) CalculatePercentile(p float64) int32 {
 	}
 
 	return 0
-}
-
-func (am *AggregatedMetrics) SetStartTime(newTime time.Time) {
-	am.mu.Lock()
-	defer am.mu.Unlock()
-
-	am.StartTime = newTime
 }
 
 // MetricsSnapshot — это слепок данных для отображения в UI

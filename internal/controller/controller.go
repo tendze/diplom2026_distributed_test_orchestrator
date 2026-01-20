@@ -3,7 +3,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -22,13 +21,16 @@ const (
 type Orchestrator struct {
 	agents  *AgentMap
 	metrics *AggregatedMetrics
+
+	testInfo *TestInfo
 }
 
 // NewOrchestrator создает новый экземпляр оркестратора.
-func NewOrchestrator(agentMap *AgentMap, metrics *AggregatedMetrics) *Orchestrator {
+func NewOrchestrator(agentMap *AgentMap, metrics *AggregatedMetrics, testInfo *TestInfo) *Orchestrator {
 	return &Orchestrator{
-		agents:  agentMap,
-		metrics: metrics,
+		agents:   agentMap,
+		metrics:  metrics,
+		testInfo: testInfo,
 	}
 }
 
@@ -54,13 +56,15 @@ func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRe
 	// 1. Стадия Discovery и Валидация режима
 	for _, agent := range o.agents.GetList() {
 		handle, err := o.pingAgent(ctx, agent.GetAddress())
+		agent.UpdateStatus(STATUS_CONNECTING)
 		if err != nil {
+			agent.UpdateStatus(STATUS_OFFLINE)
 			if mode == "strict" {
 				return fmt.Errorf("strict mode violation: agent %s is unreachable: %w", agent.GetAddress(), err)
 			}
-			fmt.Printf("skipped agent (any mode). agent_addr=%s", agent.GetAddress())
 			continue
 		}
+		agent.UpdateStatus(STATUS_IDLE)
 		activeAgents = append(activeAgents, *handle)
 		totalCores += handle.cores
 	}
@@ -74,6 +78,8 @@ func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRe
 	// Устанавливаем время старта теста now() + SyncStartDuration
 	startTime := time.Now().Add(SyncStartDuration).UnixMilli()
 
+	go o.testInfo.NotifyAtUnixTime(ctx, startTime)
+
 	var wg sync.WaitGroup
 
 	for _, agent := range activeAgents {
@@ -84,6 +90,9 @@ func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRe
 		if agentRPS == 0 {
 			agentRPS = 1 // Гарантируем минимальную нагрузку
 		}
+
+		agentInfo, _ := o.agents.GetInfo(agent.addr)
+		agentInfo.UpdateStatus(STATUS_SYNCHRONIZING)
 
 		// Воркер нагрузки и отправки метрик
 		wg.Add(1)
@@ -99,7 +108,9 @@ func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRe
 				startTime,
 			)
 			if err != nil {
-				log.Printf("Agent %s stream error: %v", a.addr, err)
+				agentInfo.UpdateStatus(STATUS_FAILED)
+			} else {
+				agentInfo.UpdateStatus(STATUS_FINISHED)
 			}
 		}(agent, agentRPS)
 	}
@@ -148,6 +159,8 @@ func (o *Orchestrator) agentWorker(
 	}
 	defer conn.Close()
 
+	agentInfo, _ := o.agents.GetInfo(addr)
+
 	client := agentpb.NewAgentServiceClient(conn)
 	stream, err := client.StartTest(ctx, &agentpb.StartTestRequest{
 		TestId:          testID,
@@ -169,6 +182,10 @@ func (o *Orchestrator) agentWorker(
 			if err != nil {
 				// EOF означает штатное завершение стрима агентом
 				return nil
+			}
+
+			if agentInfo.GetStatus() != STATUS_WORKING {
+				agentInfo.UpdateStatus(STATUS_WORKING)
 			}
 
 			// Агрегация полученных метрик в общее хранилище
