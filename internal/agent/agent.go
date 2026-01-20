@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"math"
 	"sync"
@@ -13,6 +12,10 @@ import (
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent"
 	commonpb "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/common"
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/engine"
+)
+
+const (
+	MetricsStreamDurtaion = time.Second
 )
 
 type AgentService struct {
@@ -77,7 +80,7 @@ func (s *AgentService) StartTest(
 	wg.Wait()
 
 	// TODO: replace with slog
-	fmt.Printf("Test %s finished\n", req.TestId)
+	log.Printf("Test %s finished", req.TestId)
 	return nil
 }
 
@@ -120,7 +123,7 @@ func (s *AgentService) runLoad(
 }
 
 func (s *AgentService) streamMetrics(ctx context.Context, metrics *LocalMetrics, stream agent.AgentService_StartTestServer) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(MetricsStreamDurtaion)
 	defer ticker.Stop()
 
 	for {

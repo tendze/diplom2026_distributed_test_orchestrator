@@ -125,12 +125,6 @@ func (am *AggregatedMetrics) GetSnapshot() MetricsSnapshot {
 	am.mu.RLock() // Блокируем только на чтение
 	defer am.mu.RUnlock()
 
-	// Копируем карту бакетов, чтобы избежать race condition при итерации в UI
-	bucketsCopy := make(map[int32]int64)
-	for k, v := range am.buckets {
-		bucketsCopy[k] = v
-	}
-
 	return MetricsSnapshot{
 		Req1XX:       am.Req1XX,
 		Req2XX:       am.Req2XX,
@@ -144,7 +138,6 @@ func (am *AggregatedMetrics) GetSnapshot() MetricsSnapshot {
 		MaxLatencyMs: am.maxLatencyMs,
 		MinLatencyMs: am.minLatencyMs,
 		AvgLatencyMs: am.avgLatencyMs,
-		Buckets:      bucketsCopy,
 	}
 }
 
@@ -191,5 +184,4 @@ type MetricsSnapshot struct {
 	MaxLatencyMs                                       float64
 	MinLatencyMs                                       float64
 	AvgLatencyMs                                       float64
-	Buckets                                            map[int32]int64
 }

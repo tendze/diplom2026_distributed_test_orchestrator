@@ -8,4 +8,4 @@ test:
   url: "http://localhost:8000"
   target_rps: 1000
   workers: 100
-  duration_seconds: 5
+  duration_seconds: 10

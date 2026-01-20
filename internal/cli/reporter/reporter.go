@@ -3,6 +3,7 @@ package reporter
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pterm/pterm"
@@ -22,7 +23,8 @@ type CLIReporter struct {
 	testInfo       *controller.TestInfo
 	updateDuration time.Duration
 
-	mode string // "solo"/"distributed"
+	testMode  string // solo | distributed
+	agentMode string // strict | any
 }
 
 func NewCLIReporter(
@@ -31,6 +33,7 @@ func NewCLIReporter(
 	testRequest controller.TestRunRequest,
 	testInfo *controller.TestInfo,
 	updateDuration time.Duration,
+	agentMode string,
 ) *CLIReporter {
 	reporter := &CLIReporter{
 		metrics:        metrics,
@@ -38,10 +41,11 @@ func NewCLIReporter(
 		testRequest:    testRequest,
 		testInfo:       testInfo,
 		updateDuration: updateDuration,
+		agentMode:      agentMode,
 	}
-	reporter.mode = SOLO_MODE
+	reporter.testMode = SOLO_MODE
 	if agents.AgentsCount > 0 {
-		reporter.mode = DISTRIBUTED_MODE
+		reporter.testMode = DISTRIBUTED_MODE
 	}
 
 	return reporter
@@ -49,8 +53,8 @@ func NewCLIReporter(
 
 func (r *CLIReporter) StartLiveReporting(ctx context.Context, duration int) {
 	r.intro()
-
-	switch r.mode {
+	
+	switch r.testMode {
 	case SOLO_MODE:
 		r.soloLiveReporting(ctx, duration)
 	case DISTRIBUTED_MODE:
@@ -91,6 +95,8 @@ func (r *CLIReporter) distributedLiveReporting(ctx context.Context, duration int
 	snap := r.metrics.GetSnapshot()
 	area.Update(r.renderUI(snap, 0, duration, false))
 
+	// Фаза ожидания начала теста
+	// обновляем только таблицу с агентами
 	testStarted := false
 	for !testStarted {
 		select {
@@ -103,6 +109,7 @@ func (r *CLIReporter) distributedLiveReporting(ctx context.Context, duration int
 		}
 	}
 
+	// Обновляем всё остальное
 	startTime := time.Now()
 	for {
 		select {
@@ -120,6 +127,8 @@ func (r *CLIReporter) distributedLiveReporting(ctx context.Context, duration int
 }
 
 func (r *CLIReporter) renderUI(snap controller.MetricsSnapshot, elapsed time.Duration, totalDuration int, isFinal bool) string {
+	var sb strings.Builder
+
 	// Progress bar
 	percent := (elapsed.Seconds() / float64(totalDuration)) * 100
 	if percent > 100 {
@@ -127,58 +136,55 @@ func (r *CLIReporter) renderUI(snap controller.MetricsSnapshot, elapsed time.Dur
 	}
 
 	bar := getProgressBarString(int(percent), 50)
-
-	// HTTP codes
-	codes := fmt.Sprintf(
-		"HTTP Codes:\n"+
-			" 1xx: %-5d 2xx: %-5d 3xx: %-5d"+
-			" 4xx: %-5d 5xx: %-5d Other: %-5d",
-		snap.Req1XX, snap.Req2XX, snap.Req3XX,
-		snap.Req4XX, snap.Req5XX, snap.OtherCodes,
-	)
-
-	var res string
-
 	elapsedSec := int(elapsed.Seconds())
 
-	if r.mode == DISTRIBUTED_MODE {
+	// Формируем верхнюю часть (Progress bar + время)
+	// Используем Fprintf прямо в builder
+	fmt.Fprintf(&sb, "%s %3.1f%% %ds/%ds\n\n", bar, percent, elapsedSec, totalDuration)
+
+	if r.testMode == DISTRIBUTED_MODE {
 		// Таблица статистики с агентами
 		statsTable := r.distributedTestTable(r.agents)
+		sb.WriteString(statsTable)
 
-		res = fmt.Sprintf(
-			"%s %3.1f%% %vs/%vs\n\n%s\n%s",
-			bar, percent, elapsedSec, totalDuration, statsTable, codes,
-		)
-
+		// Общая статистика
+		mainStatTable := r.mainStatTable(&snap)
+		sb.WriteString("\n")
+		sb.WriteString(mainStatTable)
 	} else {
 		// Таблица статистики соло запуска
 		statsTable := r.soloTestTable(&snap)
-
-		res = fmt.Sprintf(
-			"%s %3.1f%% %vs/%vs\n\n%s\n%s\n",
-			bar, percent, elapsedSec, totalDuration, statsTable, codes,
-		)
+		sb.WriteString(statsTable)
 	}
+
+	// HTTP codes (добавляем разделитель и коды)
+	sb.WriteString("\n")
+	fmt.Fprintf(&sb, "HTTP Codes:\n"+
+		" 1xx: %-5d 2xx: %-5d 3xx: %-5d"+
+		" 4xx: %-5d 5xx: %-5d Other: %-5d",
+		snap.Req1XX, snap.Req2XX, snap.Req3XX,
+		snap.Req4XX, snap.Req5XX, snap.OtherCodes)
 
 	if isFinal {
 		p50 := r.metrics.CalculatePercentile(0.5)
 		p90 := r.metrics.CalculatePercentile(0.9)
 		p99 := r.metrics.CalculatePercentile(0.99)
 
+		// Для финального блока используем временную строку, чтобы покрасить её через pterm
 		latencyBlock := fmt.Sprintf("\n\nLatency Distribution:\n"+
 			" P50: %v\n P90: %v\n P99: %v\n",
 			time.Duration(p50)*time.Millisecond,
 			time.Duration(p90)*time.Millisecond,
 			time.Duration(p99)*time.Millisecond)
 
-		res += pterm.FgCyan.Sprint(latencyBlock)
+		sb.WriteString(pterm.FgCyan.Sprint(latencyBlock))
 	}
 
-	return res
+	return sb.String()
 }
 
 func (r *CLIReporter) intro() {
-	soloStart := r.mode == SOLO_MODE
+	soloStart := r.testMode == SOLO_MODE
 
 	mode := "Distributed"
 	if soloStart {
@@ -189,8 +195,8 @@ func (r *CLIReporter) intro() {
 		r.testRequest.URL, r.testRequest.TargetRPS)
 
 	if soloStart {
-		intro = fmt.Sprintf("Load testing %s with %d workers\nTarget RPS: %d",
-			r.testRequest.URL, r.testRequest.Workers, r.testRequest.TargetRPS)
+		intro = fmt.Sprintf("Load testing %s with %d workers\nTarget RPS: %d\nAgent mode: %s",
+			r.testRequest.URL, r.testRequest.Workers, r.testRequest.TargetRPS, r.agentMode)
 	}
 	pterm.DefaultBox.WithTitle(fmt.Sprintf("Starting %s Test: <%s>", mode, r.testRequest.TestID)).Println(intro)
 }
@@ -215,14 +221,28 @@ func (r *CLIReporter) soloTestTable(snap *controller.MetricsSnapshot) string {
 func (r *CLIReporter) distributedTestTable(
 	agents *controller.AgentMap,
 ) string {
-	data := make([][]string, 0, agents.AgentsCount+1)
-	data = append(data, []string{"Agent", "Sent", "Failed", "Status"})
+	agentTable := make([][]string, 0, agents.AgentsCount+1)
+	agentTable = append(agentTable, []string{"Agent", "Sent", "Failed", "Status"})
 	for _, agent := range agents.GetList() {
 		sentStr := pterm.LightGreen(fmt.Sprintf("%d", agent.GetSent()))
 		failedStr := pterm.LightRed(fmt.Sprintf("%d", agent.GetFailed()))
-		data = append(data, []string{agent.GetAddress(), sentStr, failedStr, agent.GetStatus()})
+		agentTable = append(agentTable, []string{agent.GetAddress(), sentStr, failedStr, agent.GetStatus()})
 	}
-	statsTable, _ := pterm.DefaultTable.WithData(data).Srender()
+	statsTable, _ := pterm.DefaultTable.WithData(agentTable).Srender()
 
 	return statsTable
+}
+
+func (r *CLIReporter) mainStatTable(snap *controller.MetricsSnapshot) string {
+	table, _ := pterm.DefaultTable.WithData(pterm.TableData{
+		{"Requests Sent", "Success", "Failed", "Throughput"},
+		{
+			fmt.Sprintf("%d", snap.TotalSent),
+			pterm.LightGreen(fmt.Sprintf("%d", snap.Req2XX)),
+			pterm.LightRed(fmt.Sprintf("%d", snap.TotalFailed)),
+			fmt.Sprintf("%.2f MB", float64(snap.TotalBytes)/1024/1024),
+		},
+	}).Srender()
+
+	return table
 }
