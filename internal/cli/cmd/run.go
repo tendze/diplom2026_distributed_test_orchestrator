@@ -105,7 +105,7 @@ func runTest(cmd *cobra.Command, args []string) {
 	// CLI
 	wg.Add(1)
 
-	rep := reporter.NewCLIReporter(metrics, agentMap, runRequest, testInfo, 150*time.Millisecond, *cfg.Agents.Mode)
+	rep := reporter.NewCLIReporter(metrics, agentMap, runRequest, testInfo, 150*time.Millisecond, cfg.Agents.Mode)
 	go func() {
 		defer wg.Done()
 		rep.StartLiveReporting(ctx, int(cfg.Test.DurationSeconds))
@@ -142,5 +142,7 @@ func countTestDuration(testDuration int32) time.Duration {
 		return time.Duration(testDuration) * time.Second
 	}
 
-	return time.Duration(testDuration)*time.Second + controller.SyncStartDuration
+	return time.Duration(testDuration)*time.Second +
+		controller.SyncStartDuration +
+		controller.TestOverheadDuration
 }

@@ -2,6 +2,7 @@ package reporter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -23,8 +24,8 @@ type CLIReporter struct {
 	testInfo       *controller.TestInfo
 	updateDuration time.Duration
 
-	testMode  string // solo | distributed
-	agentMode string // strict | any
+	testMode  string  // solo | distributed
+	agentMode *string // strict | any
 }
 
 func NewCLIReporter(
@@ -33,7 +34,7 @@ func NewCLIReporter(
 	testRequest controller.TestRunRequest,
 	testInfo *controller.TestInfo,
 	updateDuration time.Duration,
-	agentMode string,
+	agentMode *string,
 ) *CLIReporter {
 	reporter := &CLIReporter{
 		metrics:        metrics,
@@ -53,7 +54,7 @@ func NewCLIReporter(
 
 func (r *CLIReporter) StartLiveReporting(ctx context.Context, duration int) {
 	r.intro()
-	
+
 	switch r.testMode {
 	case SOLO_MODE:
 		r.soloLiveReporting(ctx, duration)
@@ -74,7 +75,9 @@ func (r *CLIReporter) soloLiveReporting(ctx context.Context, duration int) {
 		select {
 		case <-ctx.Done():
 			snap := r.metrics.GetSnapshot()
-			area.Update(r.renderUI(snap, time.Duration(duration)*time.Second, duration, true))
+
+			elapsed := countTestDurationWithContext(ctx, startTime, time.Duration(duration))
+			area.Update(r.renderUI(snap, elapsed, duration, true))
 			area.Stop()
 			return
 		case <-ticker.C:
@@ -101,6 +104,7 @@ func (r *CLIReporter) distributedLiveReporting(ctx context.Context, duration int
 	for !testStarted {
 		select {
 		case <-ctx.Done():
+			area.Update(r.renderUI(snap, 0, duration, false))
 			return
 		case <-r.testInfo.Start:
 			testStarted = true
@@ -115,7 +119,8 @@ func (r *CLIReporter) distributedLiveReporting(ctx context.Context, duration int
 		select {
 		case <-ctx.Done():
 			snap := r.metrics.GetSnapshot()
-			area.Update(r.renderUI(snap, time.Duration(duration)*time.Second, duration, true))
+			elapsed := countTestDurationWithContext(ctx, startTime, time.Duration(duration))
+			area.Update(r.renderUI(snap, elapsed, duration, true))
 			area.Stop()
 			return
 		case <-ticker.C:
@@ -171,7 +176,7 @@ func (r *CLIReporter) renderUI(snap controller.MetricsSnapshot, elapsed time.Dur
 		p99 := r.metrics.CalculatePercentile(0.99)
 
 		// Для финального блока используем временную строку, чтобы покрасить её через pterm
-		latencyBlock := fmt.Sprintf("\n\nLatency Distribution:\n"+
+		latencyBlock := fmt.Sprintf("\nLatency Distribution:\n"+
 			" P50: %v\n P90: %v\n P99: %v\n",
 			time.Duration(p50)*time.Millisecond,
 			time.Duration(p90)*time.Millisecond,
@@ -193,10 +198,9 @@ func (r *CLIReporter) intro() {
 
 	intro := fmt.Sprintf("Load testing %s\nTarget RPS: %d",
 		r.testRequest.URL, r.testRequest.TargetRPS)
-
-	if soloStart {
+	if !soloStart {
 		intro = fmt.Sprintf("Load testing %s with %d workers\nTarget RPS: %d\nAgent mode: %s",
-			r.testRequest.URL, r.testRequest.Workers, r.testRequest.TargetRPS, r.agentMode)
+			r.testRequest.URL, r.testRequest.Workers, r.testRequest.TargetRPS, *r.agentMode)
 	}
 	pterm.DefaultBox.WithTitle(fmt.Sprintf("Starting %s Test: <%s>", mode, r.testRequest.TestID)).Println(intro)
 }
@@ -224,9 +228,11 @@ func (r *CLIReporter) distributedTestTable(
 	agentTable := make([][]string, 0, agents.AgentsCount+1)
 	agentTable = append(agentTable, []string{"Agent", "Sent", "Failed", "Status"})
 	for _, agent := range agents.GetList() {
+		agentAddressStr := agent.GetAddress()
 		sentStr := pterm.LightGreen(fmt.Sprintf("%d", agent.GetSent()))
 		failedStr := pterm.LightRed(fmt.Sprintf("%d", agent.GetFailed()))
-		agentTable = append(agentTable, []string{agent.GetAddress(), sentStr, failedStr, agent.GetStatus()})
+		agentStatusColoredStr := r.colorStatus(agent.GetStatus())
+		agentTable = append(agentTable, []string{agentAddressStr, sentStr, failedStr, agentStatusColoredStr})
 	}
 	statsTable, _ := pterm.DefaultTable.WithData(agentTable).Srender()
 
@@ -245,4 +251,34 @@ func (r *CLIReporter) mainStatTable(snap *controller.MetricsSnapshot) string {
 	}).Srender()
 
 	return table
+}
+
+func (r *CLIReporter) colorStatus(status string) string {
+	switch status {
+	case controller.STATUS_OFFLINE, controller.STATUS_FAILED:
+		return pterm.LightRed(status)
+	case controller.STATUS_SYNCHRONIZING, controller.STATUS_CONNECTING:
+		return pterm.LightYellow(status)
+	case controller.STATUS_FINISHED, controller.STATUS_WORKING:
+		return pterm.LightGreen(status)
+	default:
+		return status
+	}
+}
+
+// countTestDurationWithContext считает время, которое нужно отобразить на progress bar
+// в зависимости от контекста
+// Если контекст завершился по дедлайну, то возвращается полное время
+// иначе если контекст завершился по отмене, то возвращается время, которое прошло
+func countTestDurationWithContext(
+	ctx context.Context,
+	startTime time.Time,
+	testDuration time.Duration,
+) time.Duration {
+	elapsed := time.Since(startTime)
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		elapsed = testDuration * time.Second
+	}
+
+	return elapsed
 }

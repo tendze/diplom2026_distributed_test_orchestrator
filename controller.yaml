@@ -1,8 +1,4 @@
-agents:
-  mode: "strict"
-  targets:
-    - localhost:9001
-    - localhost:9002
+
 test:
   id: "test1"
   url: "http://localhost:8000"

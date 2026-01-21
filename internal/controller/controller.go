@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 const (
 	AvailabilityCheckingTimeout = 3 * time.Second
 	SyncStartDuration           = 2 * time.Second
+	TestOverheadDuration        = 2 * time.Second
 )
 
 // Orchestrator выполняет функции управления распределенным и одиночным тестированием.
@@ -109,8 +111,6 @@ func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRe
 			)
 			if err != nil {
 				agentInfo.UpdateStatus(STATUS_FAILED)
-			} else {
-				agentInfo.UpdateStatus(STATUS_FINISHED)
 			}
 		}(agent, agentRPS)
 	}
@@ -155,7 +155,7 @@ func (o *Orchestrator) agentWorker(
 ) error {
 	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return err
+		return AgentConnectionError
 	}
 	defer conn.Close()
 
@@ -181,7 +181,14 @@ func (o *Orchestrator) agentWorker(
 			msg, err := stream.Recv()
 			if err != nil {
 				// EOF означает штатное завершение стрима агентом
-				return nil
+				if err == io.EOF {
+					agentInfo.UpdateStatus(STATUS_FINISHED)
+					return nil
+				}
+
+				// Иначе слетело соединение с агентом
+				agentInfo.UpdateStatus(STATUS_FAILED)
+				return AgentDisconnectedError
 			}
 
 			if agentInfo.GetStatus() != STATUS_WORKING {

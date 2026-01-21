@@ -16,6 +16,7 @@ import (
 
 const (
 	MetricsStreamDurtaion = time.Second
+	SyncStartDuration     = 2 * time.Second
 )
 
 type AgentService struct {
@@ -26,10 +27,6 @@ func (s *AgentService) StartTest(
 	req *agent.StartTestRequest,
 	stream agent.AgentService_StartTestServer,
 ) error {
-	// Создаем контекст, который отменится либо по длительности теста, либо если клиент (контроллер) отвалится
-	ctx, cancel := context.WithTimeout(stream.Context(), time.Duration(req.DurationSeconds)*time.Second)
-	defer cancel()
-
 	runner := engine.NewHTTPRunner(req.Url)
 	limiter := engine.NewRateLimiter(int(req.Rps))
 	metrics := NewLocalMetrics()
@@ -40,6 +37,10 @@ func (s *AgentService) StartTest(
 	workerCount := int(math.Max(1, math.Min(float64(req.Rps/2), 1000)))
 
 	log.Printf("Starting test: ID=%s, RPS=%d, Workers=%d\n", req.TestId, req.Rps, workerCount)
+
+	// Создаем контекст, который отменится либо по длительности теста, либо если клиент (контроллер) отвалится
+	ctx, cancel := context.WithTimeout(stream.Context(), time.Duration(req.DurationSeconds)*time.Second+SyncStartDuration)
+	defer cancel()
 
 	// Учитываем время старта теста, указанный контроллером
 	// для синхронизированного старта
@@ -126,28 +127,33 @@ func (s *AgentService) streamMetrics(ctx context.Context, metrics *LocalMetrics,
 	ticker := time.NewTicker(MetricsStreamDurtaion)
 	defer ticker.Stop()
 
+	sendSnapshot := func() error {
+		sent, failed, bytesSent, statuses, buckets := metrics.Snapshot()
+
+		pbMetrics := &commonpb.Metrics{
+			Rps:        float64(sent),
+			Sent:       sent,
+			Failed:     failed,
+			BytesCount: bytesSent,
+			Req_1Xx:    statuses[0],
+			Req_2Xx:    statuses[1],
+			Req_3Xx:    statuses[2],
+			Req_4Xx:    statuses[3],
+			Req_5Xx:    statuses[4],
+			Buckets:    buckets,
+		}
+
+		return stream.Send(pbMetrics)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
+			_ = sendSnapshot()
 			return
 		case <-ticker.C:
-			sent, failed, bytesSent, statuses, buckets := metrics.Snapshot()
-
-			metrics := &commonpb.Metrics{
-				Rps:        float64(sent),
-				Sent:       sent,
-				Failed:     failed,
-				BytesCount: bytesSent,
-				Req_1Xx:    statuses[0],
-				Req_2Xx:    statuses[1],
-				Req_3Xx:    statuses[2],
-				Req_4Xx:    statuses[3],
-				Req_5Xx:    statuses[4],
-				Buckets:    buckets,
-			}
-
-			err := stream.Send(metrics)
-			if err != nil {
+			if err := sendSnapshot(); err != nil {
+				// Если разорвалось соединение, выходим
 				return
 			}
 		}

@@ -16,6 +16,11 @@ const (
 )
 
 var (
+	AgentDisconnectedError = errors.New("agent disconnected")
+	AgentConnectionError   = errors.New("failed to connect to agent")
+)
+
+var (
 	InvalidStatusError = errors.New("invalid status")
 )
 
@@ -71,7 +76,7 @@ func (ai *AgentInfo) GetFailed() int64 {
 	defer ai.mu.RUnlock()
 	return ai.failed
 }
- 
+
 // GetCores возвращает количество ядер
 func (ai *AgentInfo) GetCores() int32 {
 	ai.mu.RLock()
