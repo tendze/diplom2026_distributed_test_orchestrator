@@ -2,18 +2,20 @@ package controller
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
-
-// TestInfo - вспомогательная структура для оповещения об старте теста
+// TestInfo - вспомогательная структура с информацией о тесте
 type TestInfo struct {
-	Start chan struct{} // Канал для оповещения
+	Start chan struct{}   // Канал для оповещения
+	wg    *sync.WaitGroup // WaitGroup для синхронизации всех агентов - для правильного отображения таблицы с агентами
 }
 
 func NewTestInfo() *TestInfo {
 	testInfo := &TestInfo{
 		Start: make(chan struct{}, 1),
+		wg:    &sync.WaitGroup{},
 	}
 	return testInfo
 }
@@ -34,4 +36,16 @@ func (ti *TestInfo) NotifyAtUnixTime(ctx context.Context, unix int64) {
 		default:
 		}
 	}
+}
+
+func (ti *TestInfo) AddWorker(agentWorkersCount int) {
+	ti.wg.Add(agentWorkersCount)
+}
+
+func (ti *TestInfo) WorkerDone() {
+	ti.wg.Done()
+}
+
+func (ti *TestInfo) WaitForWorkers() {
+	ti.wg.Wait()
 }

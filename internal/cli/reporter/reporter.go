@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -75,7 +76,6 @@ func (r *CLIReporter) soloLiveReporting(ctx context.Context, duration int) {
 		select {
 		case <-ctx.Done():
 			snap := r.metrics.GetSnapshot()
-
 			elapsed := countTestDurationWithContext(ctx, startTime, time.Duration(duration))
 			area.Update(r.renderUI(snap, elapsed, duration, true))
 			area.Stop()
@@ -104,6 +104,8 @@ func (r *CLIReporter) distributedLiveReporting(ctx context.Context, duration int
 	for !testStarted {
 		select {
 		case <-ctx.Done():
+			// Ждём окончания работы всех воркеров агентов
+			r.testInfo.WaitForWorkers()
 			area.Update(r.renderUI(snap, 0, duration, false))
 			return
 		case <-r.testInfo.Start:
@@ -118,6 +120,9 @@ func (r *CLIReporter) distributedLiveReporting(ctx context.Context, duration int
 	for {
 		select {
 		case <-ctx.Done():
+			// Ждём окончания работы всех воркеров агентов
+			r.testInfo.WaitForWorkers()
+
 			snap := r.metrics.GetSnapshot()
 			elapsed := countTestDurationWithContext(ctx, startTime, time.Duration(duration))
 			area.Update(r.renderUI(snap, elapsed, duration, true))
@@ -142,6 +147,9 @@ func (r *CLIReporter) renderUI(snap controller.MetricsSnapshot, elapsed time.Dur
 
 	bar := getProgressBarString(int(percent), 50)
 	elapsedSec := int(elapsed.Seconds())
+	if elapsedSec > totalDuration {
+		elapsedSec = totalDuration
+	}
 
 	// Формируем верхнюю часть (Progress bar + время)
 	// Используем Fprintf прямо в builder
@@ -166,7 +174,7 @@ func (r *CLIReporter) renderUI(snap controller.MetricsSnapshot, elapsed time.Dur
 	sb.WriteString("\n")
 	fmt.Fprintf(&sb, "HTTP Codes:\n"+
 		" 1xx: %-5d 2xx: %-5d 3xx: %-5d"+
-		" 4xx: %-5d 5xx: %-5d Other: %-5d",
+		" 4xx: %-5d 5xx: %-5d Other: %-5d\n",
 		snap.Req1XX, snap.Req2XX, snap.Req3XX,
 		snap.Req4XX, snap.Req5XX, snap.OtherCodes)
 
@@ -175,7 +183,6 @@ func (r *CLIReporter) renderUI(snap controller.MetricsSnapshot, elapsed time.Dur
 		p90 := r.metrics.CalculatePercentile(0.9)
 		p99 := r.metrics.CalculatePercentile(0.99)
 
-		// Для финального блока используем временную строку, чтобы покрасить её через pterm
 		latencyBlock := fmt.Sprintf("\nLatency Distribution:\n"+
 			" P50: %v\n P90: %v\n P99: %v\n",
 			time.Duration(p50)*time.Millisecond,
@@ -183,6 +190,11 @@ func (r *CLIReporter) renderUI(snap controller.MetricsSnapshot, elapsed time.Dur
 			time.Duration(p99)*time.Millisecond)
 
 		sb.WriteString(pterm.FgCyan.Sprint(latencyBlock))
+
+		if r.testMode == DISTRIBUTED_MODE {
+			top5Errors := r.RenderDetailedErrors()
+			sb.WriteString(top5Errors)
+		}
 	}
 
 	return sb.String()
@@ -196,22 +208,29 @@ func (r *CLIReporter) intro() {
 		mode = "Solo"
 	}
 
-	intro := fmt.Sprintf("Load testing %s\nTarget RPS: %d",
-		r.testRequest.URL, r.testRequest.TargetRPS)
+	intro := fmt.Sprintf("Load testing %s with %d workers\nTarget RPS: %d",
+		r.testRequest.URL, r.testRequest.Workers, r.testRequest.TargetRPS)
 	if !soloStart {
-		intro = fmt.Sprintf("Load testing %s with %d workers\nTarget RPS: %d\nAgent mode: %s",
-			r.testRequest.URL, r.testRequest.Workers, r.testRequest.TargetRPS, *r.agentMode)
+		intro = fmt.Sprintf("Load testing %s\nTarget RPS: %d\nAgent mode: %s",
+			r.testRequest.URL, r.testRequest.TargetRPS, *r.agentMode)
 	}
 	pterm.DefaultBox.WithTitle(fmt.Sprintf("Starting %s Test: <%s>", mode, r.testRequest.TestID)).Println(intro)
 }
 
 func (r *CLIReporter) soloTestTable(snap *controller.MetricsSnapshot) string {
+	successRate := 0.0
+	successRequests := snap.TotalSent - snap.TotalFailed
+	if successRequests > 0 {
+		successRate = (float64(snap.Req2XX) / float64(successRequests)) * 100
+	}
+	successRateStr := fmt.Sprintf("%.1f%%", successRate)
 	statsTable, _ := pterm.DefaultTable.WithData(pterm.TableData{
-		{"Requests Sent", "Success", "Failed", "Min", "Avg", "Max", "Throughput"},
+		{"Requests Sent", "Success", "Failed", "Success Rate", "Min", "Avg", "Max", "Throughput"},
 		{
 			fmt.Sprintf("%d", snap.TotalSent),
 			pterm.LightGreen(fmt.Sprintf("%d", snap.Req2XX)),
 			pterm.LightRed(fmt.Sprintf("%d", snap.TotalFailed)),
+			successRateStr,
 			fmt.Sprintf("%.2fms", snap.MinLatencyMs),
 			fmt.Sprintf("%.2fms", snap.AvgLatencyMs),
 			fmt.Sprintf("%.2fms", snap.MaxLatencyMs),
@@ -226,13 +245,44 @@ func (r *CLIReporter) distributedTestTable(
 	agents *controller.AgentMap,
 ) string {
 	agentTable := make([][]string, 0, agents.AgentsCount+1)
-	agentTable = append(agentTable, []string{"Agent", "Sent", "Failed", "Status"})
+	agentTable = append(agentTable, []string{"Agent", "Sent", "Failed", "RPS", "Success Rate", "Avg", "Max", "Throughput", "Status"})
 	for _, agent := range agents.GetList() {
 		agentAddressStr := agent.GetAddress()
 		sentStr := pterm.LightGreen(fmt.Sprintf("%d", agent.GetSent()))
 		failedStr := pterm.LightRed(fmt.Sprintf("%d", agent.GetFailed()))
+		currentRPSStr := fmt.Sprintf("%d", agent.GetCurrentRPS())
+
+		successRate := 0.0
+		successRequests := agent.GetSuccessRequests()
+		if successRequests > 0 {
+			successRate = (float64(agent.Get2XX()) / float64(successRequests)) * 100
+		}
+
+		maxLatency := agent.GetMaxLatencyMs()
+		if maxLatency < 0 {
+			maxLatency = 0
+		}
+
+		successRateStr := fmt.Sprintf("%.1f%%", successRate)
+		avgStr := fmt.Sprintf("%.2fms", agent.GetAvgLatency())
+		maxStr := fmt.Sprintf("%.2fms", maxLatency)
+		throughputStr := fmt.Sprintf("%.2f MB", float64(agent.GetBytesSent())/1024/1024)
+
 		agentStatusColoredStr := r.colorStatus(agent.GetStatus())
-		agentTable = append(agentTable, []string{agentAddressStr, sentStr, failedStr, agentStatusColoredStr})
+		agentTable = append(
+			agentTable,
+			[]string{
+				agentAddressStr,
+				sentStr,
+				failedStr,
+				currentRPSStr,
+				successRateStr,
+				avgStr,
+				maxStr,
+				throughputStr,
+				agentStatusColoredStr,
+			},
+		)
 	}
 	statsTable, _ := pterm.DefaultTable.WithData(agentTable).Srender()
 
@@ -253,9 +303,64 @@ func (r *CLIReporter) mainStatTable(snap *controller.MetricsSnapshot) string {
 	return table
 }
 
+func (r *CLIReporter) RenderDetailedErrors() string {
+	var sb strings.Builder
+
+	// Получаем список агентов и сортируем их по адресу/имени для стабильности UI
+	agentList := r.agents.GetList()
+	sort.Slice(agentList, func(i, j int) bool {
+		return agentList[i].GetAddress() < agentList[j].GetAddress()
+	})
+
+	sb.WriteString(pterm.Bold.Sprint("\nDetailed Network Errors by Agent:\n"))
+
+	for _, ai := range agentList {
+		type errorEntry struct {
+			msg   string
+			count int64
+		}
+		var topErrors []errorEntry
+		for msg, count := range ai.GetErrorDetail() {
+			topErrors = append(topErrors, errorEntry{msg, count})
+		}
+
+		// Если ошибок нет, пропускаем агента или пишем "No errors"
+		if len(topErrors) == 0 {
+			continue
+		}
+
+		// Сортируем: сначала те, которых больше
+		sort.Slice(topErrors, func(i, j int) bool {
+			return topErrors[i].count > topErrors[j].count
+		})
+
+		// Заголовок агента
+		agentHeader := pterm.FgCyan.Sprintf("➤ %s", ai.GetAddress())
+		sb.WriteString(agentHeader + "\n")
+
+		// Берем Top 5
+		limit := 5
+		if len(topErrors) < 5 {
+			limit = len(topErrors)
+		}
+
+		for i := 0; i < limit; i++ {
+			err := topErrors[i]
+			line := fmt.Sprintf("  %s %-5d %s\n",
+				pterm.Gray("└─"),
+				err.count,
+				pterm.FgLightRed.Sprint(err.msg),
+			)
+			sb.WriteString(line)
+		}
+	}
+
+	return sb.String()
+}
+
 func (r *CLIReporter) colorStatus(status string) string {
 	switch status {
-	case controller.STATUS_OFFLINE, controller.STATUS_FAILED:
+	case controller.STATUS_OFFLINE, controller.STATUS_FAILED, controller.STATUS_CANCELLED:
 		return pterm.LightRed(status)
 	case controller.STATUS_SYNCHRONIZING, controller.STATUS_CONNECTING:
 		return pterm.LightYellow(status)

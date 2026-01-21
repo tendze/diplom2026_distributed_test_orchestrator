@@ -80,7 +80,6 @@ func (s *AgentService) StartTest(
 
 	wg.Wait()
 
-	// TODO: replace with slog
 	log.Printf("Test %s finished", req.TestId)
 	return nil
 }
@@ -128,19 +127,23 @@ func (s *AgentService) streamMetrics(ctx context.Context, metrics *LocalMetrics,
 	defer ticker.Stop()
 
 	sendSnapshot := func() error {
-		sent, failed, bytesSent, statuses, buckets := metrics.Snapshot()
+		snapshot := metrics.Snapshot()
 
 		pbMetrics := &commonpb.Metrics{
-			Rps:        float64(sent),
-			Sent:       sent,
-			Failed:     failed,
-			BytesCount: bytesSent,
-			Req_1Xx:    statuses[0],
-			Req_2Xx:    statuses[1],
-			Req_3Xx:    statuses[2],
-			Req_4Xx:    statuses[3],
-			Req_5Xx:    statuses[4],
-			Buckets:    buckets,
+			Rps:            float64(snapshot.Sent),
+			Sent:           snapshot.Sent,
+			Failed:         snapshot.Failed,
+			BytesCount:     snapshot.BytesSent,
+			Req_1Xx:        snapshot.StatusCounters[0],
+			Req_2Xx:        snapshot.StatusCounters[1],
+			Req_3Xx:        snapshot.StatusCounters[2],
+			Req_4Xx:        snapshot.StatusCounters[3],
+			Req_5Xx:        snapshot.StatusCounters[4],
+			Buckets:        snapshot.Buckets,
+			MinLatencyMs:   snapshot.MinLatency,
+			MaxLatencyMs:   snapshot.MaxLatency,
+			TotalLatencyMs: snapshot.TotalLatency,
+			ErrorsDetail:   snapshot.ErrorsDetail,
 		}
 
 		return stream.Send(pbMetrics)

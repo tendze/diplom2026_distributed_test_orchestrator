@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -10,7 +11,9 @@ import (
 	agentpb "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent"
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/engine"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -98,8 +101,10 @@ func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRe
 
 		// Воркер нагрузки и отправки метрик
 		wg.Add(1)
+		o.testInfo.AddWorker(1)
 		go func(a agentHandle, rps int32) {
 			defer wg.Done()
+			defer o.testInfo.WorkerDone()
 			err := o.agentWorker(
 				ctx,
 				req.TestID,
@@ -109,8 +114,16 @@ func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRe
 				req.DurationSeconds,
 				startTime,
 			)
+
 			if err != nil {
-				agentInfo.UpdateStatus(STATUS_FAILED)
+				if errors.Is(err, AgentDisconnectedError) {
+					agentInfo.UpdateStatus(STATUS_FAILED)
+				}
+				if errors.Is(err, ContextCancelled) {
+					agentInfo.UpdateStatus(STATUS_CANCELLED)
+				}
+			} else {
+				agentInfo.UpdateStatus(STATUS_FINISHED)
 			}
 		}(agent, agentRPS)
 	}
@@ -182,12 +195,21 @@ func (o *Orchestrator) agentWorker(
 			if err != nil {
 				// EOF означает штатное завершение стрима агентом
 				if err == io.EOF {
-					agentInfo.UpdateStatus(STATUS_FINISHED)
 					return nil
 				}
 
-				// Иначе слетело соединение с агентом
-				agentInfo.UpdateStatus(STATUS_FAILED)
+				// Либо отменён контекст
+				st, ok := status.FromError(err)
+				if ok && st.Code() == codes.Canceled {
+					return ContextCancelled
+				}
+
+				// Дедлайн просрочился - ок
+				if ok && st.Code() == codes.DeadlineExceeded {
+					return nil
+				}
+
+				// Либо слетело соединение с агентом
 				return AgentDisconnectedError
 			}
 
@@ -206,6 +228,22 @@ func (o *Orchestrator) agentWorker(
 				msg.Req_4Xx,
 				msg.Req_5Xx,
 				msg.Buckets,
+				msg.ErrorsDetail,
+			)
+			agentInfo.AddInfo(
+				msg.Sent,
+				msg.Failed,
+				msg.Req_1Xx,
+				msg.Req_2Xx,
+				msg.Req_3Xx,
+				msg.Req_4Xx,
+				msg.Req_5Xx,
+				msg.Sent,
+				msg.MaxLatencyMs,
+				msg.MinLatencyMs,
+				msg.TotalLatencyMs,
+				msg.BytesCount,
+				msg.ErrorsDetail,
 			)
 		}
 	}

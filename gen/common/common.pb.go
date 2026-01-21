@@ -33,10 +33,14 @@ type Metrics struct {
 	Req_4Xx int64 `protobuf:"varint,7,opt,name=req_4xx,json=req4xx,proto3" json:"req_4xx,omitempty"`
 	Req_5Xx int64 `protobuf:"varint,8,opt,name=req_5xx,json=req5xx,proto3" json:"req_5xx,omitempty"`
 	// Гистограмма: ключ - latency в мс (верхняя граница), значение - кол-во запросов
-	Buckets       map[int32]int64 `protobuf:"bytes,9,rep,name=buckets,proto3" json:"buckets,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	BytesCount    uint64          `protobuf:"varint,10,opt,name=bytes_count,json=bytesCount,proto3" json:"bytes_count,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Buckets        map[int32]int64  `protobuf:"bytes,9,rep,name=buckets,proto3" json:"buckets,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	BytesCount     uint64           `protobuf:"varint,10,opt,name=bytes_count,json=bytesCount,proto3" json:"bytes_count,omitempty"`
+	MinLatencyMs   float64          `protobuf:"fixed64,11,opt,name=min_latency_ms,json=minLatencyMs,proto3" json:"min_latency_ms,omitempty"`
+	MaxLatencyMs   float64          `protobuf:"fixed64,12,opt,name=max_latency_ms,json=maxLatencyMs,proto3" json:"max_latency_ms,omitempty"`
+	TotalLatencyMs float64          `protobuf:"fixed64,13,opt,name=total_latency_ms,json=totalLatencyMs,proto3" json:"total_latency_ms,omitempty"`
+	ErrorsDetail   map[string]int64 `protobuf:"bytes,14,rep,name=errors_detail,json=errorsDetail,proto3" json:"errors_detail,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Metrics) Reset() {
@@ -139,12 +143,40 @@ func (x *Metrics) GetBytesCount() uint64 {
 	return 0
 }
 
+func (x *Metrics) GetMinLatencyMs() float64 {
+	if x != nil {
+		return x.MinLatencyMs
+	}
+	return 0
+}
+
+func (x *Metrics) GetMaxLatencyMs() float64 {
+	if x != nil {
+		return x.MaxLatencyMs
+	}
+	return 0
+}
+
+func (x *Metrics) GetTotalLatencyMs() float64 {
+	if x != nil {
+		return x.TotalLatencyMs
+	}
+	return 0
+}
+
+func (x *Metrics) GetErrorsDetail() map[string]int64 {
+	if x != nil {
+		return x.ErrorsDetail
+	}
+	return nil
+}
+
 var File_common_proto protoreflect.FileDescriptor
 
 const file_common_proto_rawDesc = "" +
 	"\n" +
 	"\fcommon.proto\x12\n" +
-	"dto.common\"\xdd\x02\n" +
+	"dto.common\"\xe0\x04\n" +
 	"\aMetrics\x12\x10\n" +
 	"\x03rps\x18\x01 \x01(\x01R\x03rps\x12\x12\n" +
 	"\x04sent\x18\x02 \x01(\x03R\x04sent\x12\x16\n" +
@@ -157,9 +189,16 @@ const file_common_proto_rawDesc = "" +
 	"\abuckets\x18\t \x03(\v2 .dto.common.Metrics.BucketsEntryR\abuckets\x12\x1f\n" +
 	"\vbytes_count\x18\n" +
 	" \x01(\x04R\n" +
-	"bytesCount\x1a:\n" +
+	"bytesCount\x12$\n" +
+	"\x0emin_latency_ms\x18\v \x01(\x01R\fminLatencyMs\x12$\n" +
+	"\x0emax_latency_ms\x18\f \x01(\x01R\fmaxLatencyMs\x12(\n" +
+	"\x10total_latency_ms\x18\r \x01(\x01R\x0etotalLatencyMs\x12J\n" +
+	"\rerrors_detail\x18\x0e \x03(\v2%.dto.common.Metrics.ErrorsDetailEntryR\ferrorsDetail\x1a:\n" +
 	"\fBucketsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1a?\n" +
+	"\x11ErrorsDetailEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01BNZLgithub.com/tendze/diplom2026_distributed_test_orchestrator/gen/common;commonb\x06proto3"
 
 var (
@@ -174,18 +213,20 @@ func file_common_proto_rawDescGZIP() []byte {
 	return file_common_proto_rawDescData
 }
 
-var file_common_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_common_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_common_proto_goTypes = []any{
 	(*Metrics)(nil), // 0: dto.common.Metrics
 	nil,             // 1: dto.common.Metrics.BucketsEntry
+	nil,             // 2: dto.common.Metrics.ErrorsDetailEntry
 }
 var file_common_proto_depIdxs = []int32{
 	1, // 0: dto.common.Metrics.buckets:type_name -> dto.common.Metrics.BucketsEntry
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	2, // 1: dto.common.Metrics.errors_detail:type_name -> dto.common.Metrics.ErrorsDetailEntry
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_common_proto_init() }
@@ -199,7 +240,7 @@ func file_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_common_proto_rawDesc), len(file_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

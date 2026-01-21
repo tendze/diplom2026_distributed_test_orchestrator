@@ -28,13 +28,15 @@ type AggregatedMetrics struct {
 	minLatencyMs float64
 	avgLatencyMs float64
 
-	buckets map[int32]int64
+	buckets     map[int32]int64
+	errorDetail map[string]int64
 }
 
 // NewAggregatedMetrics инициализирует структуру агрегированных метрик.
 func NewAggregatedMetrics() *AggregatedMetrics {
 	return &AggregatedMetrics{
 		buckets:      make(map[int32]int64),
+		errorDetail:  make(map[string]int64),
 		maxLatencyMs: -1,
 		minLatencyMs: -1,
 	}
@@ -101,6 +103,7 @@ func (am *AggregatedMetrics) Merge(
 	failed int64, bytesSent uint64,
 	req1xx, req2xx, req3xx, req4xx, req5xx int64,
 	agentBuckets map[int32]int64,
+	agentErrorDetail map[string]int64,
 ) {
 	am.mu.Lock()
 	defer am.mu.Unlock()
@@ -118,12 +121,19 @@ func (am *AggregatedMetrics) Merge(
 	for b, count := range agentBuckets {
 		am.buckets[b] += count
 	}
+	for errorMsg, count := range agentErrorDetail {
+		am.errorDetail[errorMsg] += count
+	}
 }
 
 // GetSnapshot возвращает текущие накопленные показатели.
 func (am *AggregatedMetrics) GetSnapshot() MetricsSnapshot {
 	am.mu.RLock() // Блокируем только на чтение
 	defer am.mu.RUnlock()
+	errorDetail := make(map[string]int64)
+	for errorMsg, count := range am.errorDetail {
+		errorDetail[errorMsg] = count
+	}
 
 	return MetricsSnapshot{
 		Req1XX:       am.Req1XX,
@@ -138,6 +148,7 @@ func (am *AggregatedMetrics) GetSnapshot() MetricsSnapshot {
 		MaxLatencyMs: am.maxLatencyMs,
 		MinLatencyMs: am.minLatencyMs,
 		AvgLatencyMs: am.avgLatencyMs,
+		ErrorDetail:  errorDetail,
 	}
 }
 
@@ -184,4 +195,5 @@ type MetricsSnapshot struct {
 	MaxLatencyMs                                       float64
 	MinLatencyMs                                       float64
 	AvgLatencyMs                                       float64
+	ErrorDetail                                        map[string]int64
 }

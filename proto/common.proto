@@ -20,4 +20,11 @@ message Metrics {
   map<int32, int64> buckets = 9;
 
   uint64 bytes_count = 10;
+
+  double min_latency_ms = 11;
+  double max_latency_ms = 12;
+  double total_latency_ms = 13;
+
+  // Словарь для подсчёта количества сетевых ошибок
+  map<string, int64> errors_detail = 14;
 }
