@@ -22,6 +22,10 @@ const (
 	TestOverheadDuration        = 2 * time.Second
 )
 
+type httpClient interface {
+	DoRequest() (status int, latency time.Duration, size uint64, err error)
+}
+
 // Orchestrator выполняет функции управления распределенным и одиночным тестированием.
 type Orchestrator struct {
 	agents  *AgentMap
@@ -140,7 +144,7 @@ func (o *Orchestrator) StartSolo(ctx context.Context, req *TestRunRequest) error
 	testCtx, cancel := context.WithTimeout(ctx, time.Duration(req.DurationSeconds)*time.Second)
 	defer cancel()
 
-	runner := engine.NewHTTPRunner(req.URL)
+	runner := engine.NewFastHTTPRunner(req.URL)
 	limiter := engine.NewRateLimiter(int(req.TargetRPS))
 
 	// Чтобы не было лишних запросов
@@ -253,7 +257,7 @@ func (o *Orchestrator) agentWorker(
 func (o *Orchestrator) soloWorker(
 	ctx context.Context,
 	limiter *engine.RateLimiter,
-	httpRunner *engine.HTTPRunner,
+	httpRunner httpClient,
 ) {
 	for {
 		select {

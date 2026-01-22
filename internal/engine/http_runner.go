@@ -4,6 +4,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/valyala/fasthttp"
 )
 
 // HTTPRunner инкапсулирует логику выполнения HTTP-запросов.
@@ -16,9 +18,10 @@ type HTTPRunner struct {
 
 func NewHTTPRunner(url string) *HTTPRunner {
 	t := &http.Transport{
-		MaxIdleConns:        1000,
-		MaxIdleConnsPerHost: 1000,
+		MaxIdleConns:        10000,
+		MaxIdleConnsPerHost: 10000,
 		IdleConnTimeout:     90 * time.Second,
+		DisableKeepAlives:   false,
 	}
 
 	return &HTTPRunner{
@@ -50,4 +53,51 @@ func (r *HTTPRunner) DoRequest() (status int, latency time.Duration, size uint64
 	}
 
 	return resp.StatusCode, latency, uint64(n), nil
+}
+
+// FastHTTPRunner — структура для выполнения HTTP-запросов через пул соединений с помощью fasthttp.
+type FastHTTPRunner struct {
+	client *fasthttp.Client
+	url    string
+}
+
+func NewFastHTTPRunner(url string) *FastHTTPRunner {
+	// Настраиваем клиент fasthttp для максимальной производительности
+	client := &fasthttp.Client{
+		Name:                     "Distributed-Load-Generator",
+		MaxConnsPerHost:          20000,
+		ReadTimeout:              5 * time.Second,
+		WriteTimeout:             5 * time.Second,
+		MaxIdleConnDuration:      60 * time.Second,
+		NoDefaultUserAgentHeader: true,
+	}
+	// Настройка fasthttp
+	return &FastHTTPRunner{
+		client: client,
+		url:    url,
+	}
+}
+
+func (r *FastHTTPRunner) DoRequest() (status int, latency time.Duration, size uint64, err error) {
+	start := time.Now()
+
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	req.SetRequestURI(r.url)
+	req.Header.SetMethod(fasthttp.MethodGet)
+
+	err = r.client.Do(req, resp)
+	latency = time.Since(start)
+
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	status = resp.StatusCode()
+	size = uint64(len(resp.Body()))
+
+	return status, latency, size, nil
 }

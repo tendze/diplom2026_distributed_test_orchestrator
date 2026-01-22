@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"net"
 	"strings"
 )
@@ -27,6 +28,6 @@ func simplifyError(err error) string {
 	case strings.Contains(s, "context deadline exceeded"):
 		return "Test Timeout"
 	default:
-		return "Other Network Error"
+		return fmt.Errorf("Other Network Error: %w", err).Error()
 	}
 }

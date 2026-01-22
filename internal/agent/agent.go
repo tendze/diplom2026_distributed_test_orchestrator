@@ -14,6 +14,10 @@ import (
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/engine"
 )
 
+type httpClient interface {
+	DoRequest() (status int, latency time.Duration, size uint64, err error)
+}
+
 const (
 	MetricsStreamDurtaion = time.Second
 	SyncStartDuration     = 2 * time.Second
@@ -27,7 +31,7 @@ func (s *AgentService) StartTest(
 	req *agent.StartTestRequest,
 	stream agent.AgentService_StartTestServer,
 ) error {
-	runner := engine.NewHTTPRunner(req.Url)
+	runner := engine.NewFastHTTPRunner(req.Url)
 	limiter := engine.NewRateLimiter(int(req.Rps))
 	metrics := NewLocalMetrics()
 
@@ -104,7 +108,7 @@ func (s *AgentService) GetStatus(ctx context.Context, req *agent.GetStatusReques
 
 func (s *AgentService) runLoad(
 	ctx context.Context,
-	runner *engine.HTTPRunner,
+	runner httpClient,
 	limiter *engine.RateLimiter,
 	metrics *LocalMetrics,
 ) {
