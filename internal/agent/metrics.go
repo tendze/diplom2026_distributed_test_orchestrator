@@ -3,6 +3,8 @@ package agent
 import (
 	"sync"
 	"time"
+
+	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/lib"
 )
 
 // Стандартные границы корзин в миллисекундах (как в Prometheus)
@@ -45,7 +47,7 @@ func (m *LocalMetrics) Add(status int, latency time.Duration, bytesSent uint64, 
 	m.Sent++
 	if err != nil {
 		m.Failed++
-		errMsg := simplifyError(err)
+		errMsg := lib.SimplifyError(err)
 		m.ErrorsDetail[errMsg]++
 		return
 	}

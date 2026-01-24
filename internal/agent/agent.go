@@ -15,7 +15,7 @@ import (
 )
 
 type httpClient interface {
-	DoRequest() (status int, latency time.Duration, size uint64, err error)
+	DoRequest(context.Context) (status int, latency time.Duration, size uint64, err error)
 }
 
 const (
@@ -119,7 +119,7 @@ func (s *AgentService) runLoad(
 		default:
 			limiter.Wait(ctx)
 
-			status, latency, bytesSent, err := runner.DoRequest()
+			status, latency, bytesSent, err := runner.DoRequest(ctx)
 
 			metrics.Add(status, latency, bytesSent, err)
 		}

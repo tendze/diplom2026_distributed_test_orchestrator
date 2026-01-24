@@ -7,6 +7,6 @@ agents:
 test:
   id: "test1"
   url: "http://localhost:8000"
-  target_rps: 1500
+  target_rps: 10000
   workers: 100
-  duration_seconds: 10
+  duration_seconds: 30

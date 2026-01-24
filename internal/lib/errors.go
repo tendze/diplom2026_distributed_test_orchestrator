@@ -1,4 +1,4 @@
-package agent
+package lib
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func simplifyError(err error) string {
+func SimplifyError(err error) string {
 	if err == nil {
 		return "OK"
 	}

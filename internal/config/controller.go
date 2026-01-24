@@ -18,6 +18,7 @@ type ControllerConfig struct {
 type AgentsSection struct {
 	Mode    *string  `yaml:"mode"` // strict | any
 	Targets []string `yaml:"targets"`
+	// TODO: add distribution_mode -  equal/adaptive
 }
 
 type TestSection struct {

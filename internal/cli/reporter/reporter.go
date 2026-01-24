@@ -192,8 +192,11 @@ func (r *CLIReporter) renderUI(snap controller.MetricsSnapshot, elapsed time.Dur
 		sb.WriteString(pterm.FgCyan.Sprint(latencyBlock))
 
 		if r.testMode == DISTRIBUTED_MODE {
-			top5Errors := r.RenderDetailedErrors()
+			top5Errors := r.RenderDistributedDetailedErrors()
 			sb.WriteString(top5Errors)
+		} else {
+			top10Errors := r.RenderSoloDetailedErrors()
+			sb.WriteString(top10Errors)
 		}
 	}
 
@@ -303,11 +306,24 @@ func (r *CLIReporter) mainStatTable(snap *controller.MetricsSnapshot) string {
 	return table
 }
 
-func (r *CLIReporter) RenderDetailedErrors() string {
+// RednerDistributedDetailedErrors рендерит ошибки в распределённом режиме с агентами
+func (r *CLIReporter) RenderDistributedDetailedErrors() string {
+	agentList := r.agents.GetList()
+
+	hasErrors := false
+	for _, ai := range agentList {
+		if len(ai.GetErrorDetail()) > 0 {
+			hasErrors = true
+			break
+		}
+	}
+
+	if !hasErrors {
+		return ""
+	}
+
 	var sb strings.Builder
 
-	// Получаем список агентов и сортируем их по адресу/имени для стабильности UI
-	agentList := r.agents.GetList()
 	sort.Slice(agentList, func(i, j int) bool {
 		return agentList[i].GetAddress() < agentList[j].GetAddress()
 	})
@@ -353,6 +369,47 @@ func (r *CLIReporter) RenderDetailedErrors() string {
 			)
 			sb.WriteString(line)
 		}
+	}
+
+	return sb.String()
+}
+
+// RenderSoloDetailedErrors рендерит ошибки для режима без агентов
+func (r *CLIReporter) RenderSoloDetailedErrors() string {
+	errorDetails := r.metrics.GetErrorDetails()
+	if len(errorDetails) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString(pterm.Bold.Sprint("\nDetailed Network Errors:\n"))
+
+	type errorEntry struct {
+		msg   string
+		count int64
+	}
+	var topErrors []errorEntry
+	for msg, count := range errorDetails {
+		topErrors = append(topErrors, errorEntry{msg, count})
+	}
+
+	sort.Slice(topErrors, func(i, j int) bool {
+		return topErrors[i].count > topErrors[j].count
+	})
+
+	limit := 10
+	if len(topErrors) < 10 {
+		limit = len(topErrors)
+	}
+
+	for i := 0; i < limit; i++ {
+		err := topErrors[i]
+		line := fmt.Sprintf("  %s %-5d %s\n",
+			pterm.Gray("└─"),
+			err.count,
+			pterm.FgLightRed.Sprint(err.msg),
+		)
+		sb.WriteString(line)
 	}
 
 	return sb.String()

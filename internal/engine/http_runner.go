@@ -1,11 +1,16 @@
 package engine
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"time"
 
 	"github.com/valyala/fasthttp"
+)
+
+const (
+	RequestTimeout = 4 * time.Second
 )
 
 // HTTPRunner инкапсулирует логику выполнения HTTP-запросов.
@@ -78,7 +83,7 @@ func NewFastHTTPRunner(url string) *FastHTTPRunner {
 	}
 }
 
-func (r *FastHTTPRunner) DoRequest() (status int, latency time.Duration, size uint64, err error) {
+func (r *FastHTTPRunner) DoRequest(ctx context.Context) (status int, latency time.Duration, size uint64, err error) {
 	start := time.Now()
 
 	req := fasthttp.AcquireRequest()
@@ -89,7 +94,12 @@ func (r *FastHTTPRunner) DoRequest() (status int, latency time.Duration, size ui
 	req.SetRequestURI(r.url)
 	req.Header.SetMethod(fasthttp.MethodGet)
 
-	err = r.client.Do(req, resp)
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(RequestTimeout)
+	}
+
+	err = r.client.DoDeadline(req, resp, deadline)
 	latency = time.Since(start)
 
 	if err != nil {

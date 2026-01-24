@@ -23,7 +23,7 @@ const (
 )
 
 type httpClient interface {
-	DoRequest() (status int, latency time.Duration, size uint64, err error)
+	DoRequest(context.Context) (status int, latency time.Duration, size uint64, err error)
 }
 
 // Orchestrator выполняет функции управления распределенным и одиночным тестированием.
@@ -267,7 +267,7 @@ func (o *Orchestrator) soloWorker(
 			if err := limiter.Wait(ctx); err != nil {
 				return
 			}
-			status, latency, size, err := httpRunner.DoRequest()
+			status, latency, size, err := httpRunner.DoRequest(ctx)
 			o.metrics.Add(status, latency, size, err)
 		}
 	}

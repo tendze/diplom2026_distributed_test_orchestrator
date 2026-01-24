@@ -4,6 +4,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/lib"
 )
 
 // Стандартные границы корзин в миллисекундах (как в Prometheus)
@@ -50,6 +52,8 @@ func (m *AggregatedMetrics) Add(status int, latency time.Duration, bytesSent uin
 	m.totalSent++
 	if err != nil {
 		m.totalFailed++
+		errorMsg := lib.SimplifyError(err)
+		m.errorDetail[errorMsg]++
 		return
 	}
 
@@ -185,6 +189,17 @@ func (am *AggregatedMetrics) CalculatePercentile(p float64) int32 {
 	}
 
 	return 0
+}
+
+// GetErrorDetails возвращает словарь с ошибками и их количеством
+func (am *AggregatedMetrics) GetErrorDetails() map[string]int64 {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+	errorDetail := make(map[string]int64)
+	for errorMsg, count := range am.errorDetail {
+		errorDetail[errorMsg] = count
+	}
+	return errorDetail
 }
 
 // MetricsSnapshot — это слепок данных для отображения в UI
