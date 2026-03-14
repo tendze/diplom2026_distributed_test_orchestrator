@@ -5,11 +5,43 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/lib"
 )
 
-// Стандартные границы корзин в миллисекундах (как в Prometheus)
-var defaultBuckets = []int32{5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000}
+
+var (
+	// Стандартные границы корзин в миллисекундах (как в  Prometheus).
+	defaultBuckets = []int32{5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000}
+
+	// RequestsTotal считает общее количество запросов с разбивкой по статус-кодам.
+	RequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "dto_requests_total",
+			Help: "Total number of HTTP requests sent by agents",
+		},
+		[]string{"status_code"},
+	)
+
+	// BytesTotal считает суммарный объем переданного трафика.
+	BytesTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "dto_bytes_total",
+			Help: "Total bytes received from target",
+		},
+	)
+
+	// LatencySummary показывает текущие рассчитанные задержки (Avg, Max), 
+	// так как при Merge мы получаем уже агрегированные корзины от агентов.
+	LatencySummary = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "dto_latency_milliseconds",
+			Help: "Current calculated latency (avg, max, p99)",
+		},
+		[]string{"type"}, // Ярлыки: "avg", "max", "p99"
+	)
+)
 
 // AggregatedMetrics обеспечивает потокобезопасный сбор результатов тестирования.
 type AggregatedMetrics struct {

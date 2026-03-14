@@ -15,7 +15,12 @@ import (
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/controller"
 )
 
+const (
+	infraStartupSleepTime = 2 * time.Second
+)
+
 var runTestMode string
+var monitor bool
 
 var runTestCmd = &cobra.Command{
 	Use:   "run-test [scenario_file]",
@@ -25,6 +30,7 @@ var runTestCmd = &cobra.Command{
 }
 
 func init() {
+	runTestCmd.Flags().BoolVarP(&monitor, "monitor", "m", false, "Enable monitoring infrastructure (Prometheus/Grafana)")
 	rootCmd.AddCommand(runTestCmd)
 }
 
@@ -101,6 +107,17 @@ func runTest(cmd *cobra.Command, args []string) {
 			)
 		}
 	}()
+
+	// Monitoring
+	if monitor {
+		wg.Add(1)
+		// Запуск экспорта метрик контроллером
+		fmt.Println("📊 Metrics exporter started on http://localhost:9090/metrics")
+		go func() {
+			defer wg.Done()
+			controller.StartExposer(ctx, ":9090")
+		}()
+	}
 
 	// CLI
 	wg.Add(1)

@@ -1,12 +1,7 @@
-agents:
-  mode: strict
-  targets:
-    - localhost:9001
-    - localhost:9002
-    - localhost:9003
+
 test:
   id: "test1"
-  url: "http://localhost:8000"
+  url: "http://ya.ru"
   target_rps: 10000
   workers: 100
-  duration_seconds: 30
+  duration_seconds: 100

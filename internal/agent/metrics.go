@@ -40,6 +40,7 @@ func NewLocalMetrics() *LocalMetrics {
 	return m
 }
 
+// Add безопасно обновляет счетчики и гистограмму на основе результата одного запроса.
 func (m *LocalMetrics) Add(status int, latency time.Duration, bytesSent uint64, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -84,6 +85,7 @@ func (m *LocalMetrics) Add(status int, latency time.Duration, bytesSent uint64, 
 	}
 }
 
+// Snapshot создает и возвращает копию текущих метрик, обнуляя счетчики для следующего интервала сбора.
 func (m *LocalMetrics) Snapshot() LocalMetricsSnapshop {
 	m.mu.Lock()
 	defer m.mu.Unlock()

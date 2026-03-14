@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 1s # Интервал обновления графиков
+
+scrape_configs:
+  - job_name: 'dto-controller'
+    static_configs:
+      # host.docker.internal — это адрес хоста внутри контейнера
+      - targets: ['host.docker.internal:9090']

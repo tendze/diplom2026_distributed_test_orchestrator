@@ -69,16 +69,16 @@ func (r *CLIReporter) soloLiveReporting(ctx context.Context, duration int) {
 	defer area.Stop()
 
 	startTime := time.Now()
-	ticker := time.NewTicker(r.updateDuration)
 
+	ticker := time.NewTicker(r.updateDuration)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			snap := r.metrics.GetSnapshot()
 			elapsed := countTestDurationWithContext(ctx, startTime, time.Duration(duration))
 			area.Update(r.renderUI(snap, elapsed, duration, true))
-			area.Stop()
 			return
 		case <-ticker.C:
 			elapsed := time.Since(startTime)
