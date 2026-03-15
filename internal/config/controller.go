@@ -22,11 +22,16 @@ type AgentsSection struct {
 }
 
 type TestSection struct {
-	ID              string `yaml:"id"`
-	URL             string `yaml:"url"`
-	TargetRPS       int32  `yaml:"target_rps"`
-	DurationSeconds int32  `yaml:"duration_seconds"`
-	Workers         int32  `yaml:"workers"`
+	ID              string         `yaml:"id"`
+	URL             string         `yaml:"url"`
+	TargetRPS       int32          `yaml:"target_rps"`
+	DurationSeconds int32          `yaml:"duration_seconds"`
+	Workers         int32          `yaml:"workers"`
+	Monitor         *MonitorSection `yaml:"monitor"`
+}
+
+type MonitorSection struct {
+	Enabled *bool `yaml:"enabled"`
 }
 
 func (cc *ControllerConfig) Validate() error {

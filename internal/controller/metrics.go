@@ -10,10 +10,9 @@ import (
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/lib"
 )
 
-
 var (
 	// Стандартные границы корзин в миллисекундах (как в  Prometheus).
-	defaultBuckets = []int32{5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000}
+	DefaultBuckets = []int32{5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000}
 
 	// RequestsTotal считает общее количество запросов с разбивкой по статус-кодам.
 	RequestsTotal = promauto.NewCounterVec(
@@ -21,25 +20,35 @@ var (
 			Name: "dto_requests_total",
 			Help: "Total number of HTTP requests sent by agents",
 		},
-		[]string{"status_code"},
+		[]string{"status_code", "test_id"},
 	)
 
 	// BytesTotal считает суммарный объем переданного трафика.
-	BytesTotal = promauto.NewCounter(
+	BytesTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "dto_bytes_total",
 			Help: "Total bytes received from target",
 		},
+		[]string{"test_id"},
 	)
 
-	// LatencySummary показывает текущие рассчитанные задержки (Avg, Max), 
-	// так как при Merge мы получаем уже агрегированные корзины от агентов.
-	LatencySummary = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "dto_latency_milliseconds",
-			Help: "Current calculated latency (avg, max, p99)",
+	// LatencyBuckets показывает текущие рассчитанные задержки,
+	LatencyBuckets = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "dto_latency_bucket",
+			Help: "Latency distribution for histogram",
 		},
-		[]string{"type"}, // Ярлыки: "avg", "max", "p99"
+		[]string{"le", "test_id"},
+	)
+
+	// NetworkErrorsTotal показывает ошибку и количество вхождений
+	NetworkErrorsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "dto_network_errors_total",
+			Help: "Total number of network/transport errors",
+		},
+		// error_msg будет хранить текст ошибки из lib.SimplifyError(err)
+		[]string{"error_msg", "test_id"},
 	)
 )
 
@@ -94,7 +103,7 @@ func (m *AggregatedMetrics) Add(status int, latency time.Duration, bytesSent uin
 	m.totalBytes += bytesSent
 
 	ms := int32(latencyMs)
-	for _, b := range defaultBuckets {
+	for _, b := range DefaultBuckets {
 		if ms <= b {
 			m.buckets[b]++
 			break

@@ -1,7 +1,8 @@
-
 test:
-  id: "test1"
-  url: "http://ya.ru"
-  target_rps: 10000
-  workers: 100
-  duration_seconds: 100
+  id: "test6 solo"
+  url: "http://localhost:8000"
+  target_rps: 1000
+  workers: 900
+  duration_seconds: 60
+  monitor:
+    enabled: true

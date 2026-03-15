@@ -54,6 +54,10 @@ func runTest(cmd *cobra.Command, args []string) {
 		runTestMode = "distributed"
 	}
 
+	if cfg.Test.Monitor != nil && cfg.Test.Monitor.Enabled != nil {
+		monitor = *cfg.Test.Monitor.Enabled
+	}
+
 	// Инициализация агрегатора метрик
 	metrics := controller.NewAggregatedMetrics()
 
@@ -74,6 +78,7 @@ func runTest(cmd *cobra.Command, args []string) {
 		TargetRPS:       cfg.Test.TargetRPS,
 		DurationSeconds: cfg.Test.DurationSeconds,
 		Workers:         correctWorkers,
+		Monitor:         monitor,
 	}
 
 	// Настройка контекста для корректного завершения (Graceful Shutdown) с сигналом
@@ -112,10 +117,10 @@ func runTest(cmd *cobra.Command, args []string) {
 	if monitor {
 		wg.Add(1)
 		// Запуск экспорта метрик контроллером
-		fmt.Println("📊 Metrics exporter started on http://localhost:9090/metrics")
+		fmt.Println("📊 Metrics exporter started on http://localhost:9100/metrics")
 		go func() {
 			defer wg.Done()
-			controller.StartExposer(ctx, ":9090")
+			controller.StartExposer(ctx, ":9100")
 		}()
 	}
 

@@ -4,8 +4,13 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+const (
+	TimeForLastExport = time.Second * 15
 )
 
 func StartExposer(ctx context.Context, address string) {
@@ -17,6 +22,7 @@ func StartExposer(ctx context.Context, address string) {
 
 	go func() {
 		<-ctx.Done()
+		time.Sleep(TimeForLastExport)
 		if err := server.Shutdown(context.Background()); err != nil {
 			log.Printf("shutdown error: %v", err)
 		}

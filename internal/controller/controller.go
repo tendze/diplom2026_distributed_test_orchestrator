@@ -10,6 +10,7 @@ import (
 
 	agentpb "github.com/tendze/diplom2026_distributed_test_orchestrator/gen/agent"
 	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/engine"
+	"github.com/tendze/diplom2026_distributed_test_orchestrator/internal/lib"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -50,6 +51,7 @@ type TestRunRequest struct {
 	TargetRPS       int32
 	DurationSeconds int32
 	Workers         int32
+	Monitor         bool
 }
 
 type agentHandle struct {
@@ -117,6 +119,7 @@ func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRe
 				rps,
 				req.DurationSeconds,
 				startTime,
+				req.Monitor,
 			)
 
 			if err != nil {
@@ -155,7 +158,7 @@ func (o *Orchestrator) StartSolo(ctx context.Context, req *TestRunRequest) error
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			o.soloWorker(testCtx, limiter, runner)
+			o.soloWorker(testCtx, req.TestID, limiter, runner, req.Monitor)
 		}()
 	}
 
@@ -169,6 +172,7 @@ func (o *Orchestrator) agentWorker(
 	testID, addr, url string,
 	rps, duration int32,
 	startTimeUnix int64,
+	monitor bool,
 ) error {
 	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -221,6 +225,36 @@ func (o *Orchestrator) agentWorker(
 				agentInfo.UpdateStatus(STATUS_WORKING)
 			}
 
+			// Отправка метрик в прометеус, если включен режим мониторинга
+			if monitor {
+				// Статус-коды
+				RequestsTotal.WithLabelValues("1xx", testID).Add(float64(msg.Req_1Xx))
+				RequestsTotal.WithLabelValues("2xx", testID).Add(float64(msg.Req_2Xx))
+				RequestsTotal.WithLabelValues("3xx", testID).Add(float64(msg.Req_3Xx))
+				RequestsTotal.WithLabelValues("4xx", testID).Add(float64(msg.Req_4Xx))
+				RequestsTotal.WithLabelValues("5xx", testID).Add(float64(msg.Req_5Xx))
+
+				// Трафик
+				BytesTotal.WithLabelValues(testID).Add(float64(msg.BytesCount))
+
+				// Конвертация дискретных корзин агента в кумулятивные для Prometheus
+				var cumulativeCount float64
+				for _, b := range DefaultBuckets {
+					cumulativeCount += float64(msg.Buckets[b])
+					// Превращаем число 50 в строку "50" для метки le
+					leStr := fmt.Sprintf("%d", b)
+					LatencyBuckets.WithLabelValues(leStr, testID).Add(cumulativeCount)
+				}
+
+				// Prometheus требует корзину "+Inf" (всё, что больше 5000мс)
+				// msg.Sent - это общее количество отправленных запросов в этом тике
+				LatencyBuckets.WithLabelValues("+Inf", testID).Add(float64(msg.Sent))
+
+				for errorMsg, count := range msg.ErrorsDetail {
+					NetworkErrorsTotal.WithLabelValues(errorMsg, testID).Add(float64(count))
+				}
+			}
+
 			// Агрегация полученных метрик в общее хранилище
 			o.metrics.Merge(
 				msg.Sent,
@@ -256,8 +290,10 @@ func (o *Orchestrator) agentWorker(
 // soloWorker отвечает за стимуляцию нагрузки при запуске в соло
 func (o *Orchestrator) soloWorker(
 	ctx context.Context,
+	testID string,
 	limiter *engine.RateLimiter,
 	httpRunner httpClient,
+	monitor bool,
 ) {
 	for {
 		select {
@@ -269,6 +305,33 @@ func (o *Orchestrator) soloWorker(
 			}
 			status, latency, size, err := httpRunner.DoRequest(ctx)
 			o.metrics.Add(status, latency, size, err)
+
+
+			// TODO: async metrics exporter
+			if monitor {
+				codeStr := fmt.Sprintf("%dxx", status/100)
+				if err != nil {
+					codeStr = "error"
+				}
+				RequestsTotal.WithLabelValues(codeStr, testID).Inc()
+				BytesTotal.WithLabelValues(testID).Add(float64(size))
+
+				// Инкремент кумулятивных корзин
+				ms := int32(latency.Microseconds()) / 1000
+				for _, b := range DefaultBuckets {
+					// Если latency <= корзины, инкрементируем её
+					if ms <= b {
+						LatencyBuckets.WithLabelValues(fmt.Sprintf("%d", b), testID).Inc()
+					}
+				}
+
+				// Всегда инкрементируем +Inf
+				LatencyBuckets.WithLabelValues("+Inf", testID).Inc()
+
+				if err != nil {
+					NetworkErrorsTotal.WithLabelValues(lib.SimplifyError(err), testID).Inc()
+				}
+			}
 		}
 	}
 }
