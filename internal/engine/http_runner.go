@@ -75,6 +75,7 @@ func NewFastHTTPRunner(url string) *FastHTTPRunner {
 		WriteTimeout:             5 * time.Second,
 		MaxIdleConnDuration:      60 * time.Second,
 		NoDefaultUserAgentHeader: true,
+		MaxIdemponentCallAttempts: 1, // Чтобы не ретраить при сетевых ошибках
 	}
 	// Настройка fasthttp
 	return &FastHTTPRunner{

@@ -1,0 +1,379 @@
+{
+    "annotations": {
+        "list": []
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "links": [],
+    "panels": [
+        {
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            },
+            "id": 1,
+            "panels": [],
+            "title": "Test Execution Metrics",
+            "type": "row"
+        },
+        {
+            "title": "Total Requests Sent",
+            "type": "stat",
+            "id": 2,
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 0,
+                "y": 1
+            },
+            "targets": [
+                {
+                    "expr": "sum(increase(dto_requests_total{test_id=\"$test_id\"}[$__range]))",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "fixed",
+                        "fixedColor": "blue"
+                    },
+                    "unit": "none"
+                }
+            }
+        },
+        {
+            "title": "Current HTTP RPS",
+            "type": "stat",
+            "id": 4,
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 6,
+                "y": 1
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(dto_requests_total{test_id=\"$test_id\"}[10s]))",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "unit": "reqps"
+                }
+            }
+        },
+        {
+            "title": "Total Failed (Network Error)",
+            "type": "stat",
+            "id": 15,
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 1
+            },
+            "targets": [
+                {
+                    "expr": "sum(increase(dto_network_errors_total{test_id=\"$test_id\"}[$__range]))",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "fixed",
+                        "fixedColor": "red"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "textMode": "auto"
+            }
+        },
+        {
+            "title": "Network Throughput",
+            "type": "stat",
+            "id": 6,
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 1
+            },
+            "targets": [
+                {
+                    "expr": "rate(dto_bytes_total{test_id=\"$test_id\"}[10s])",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "Bps"
+                }
+            }
+        },
+        {
+            "title": "HTTP Status Codes By RPS",
+            "type": "timeseries",
+            "id": 7,
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 5
+            },
+            "targets": [
+                {
+                    "expr": "sum by (status_code) (rate(dto_requests_total{test_id=\"$test_id\"}[10s]))",
+                    "legendFormat": "{{status_code}}",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "drawStyle": "line",
+                        "lineInterpolation": "smooth"
+                    },
+                    "unit": "reqps"
+                }
+            }
+        },
+        {
+            "title": "Latency Percentiles",
+            "type": "timeseries",
+            "id": 8,
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 5
+            },
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.99, sum by (le) (rate(dto_latency_bucket{test_id=\"$test_id\"}[1m])))",
+                    "legendFormat": "P99",
+                    "refId": "A"
+                },
+                {
+                    "expr": "histogram_quantile(0.95, sum by (le) (rate(dto_latency_bucket{test_id=\"$test_id\"}[1m])))",
+                    "legendFormat": "P95",
+                    "refId": "B"
+                },
+                {
+                    "expr": "histogram_quantile(0.50, sum by (le) (rate(dto_latency_bucket{test_id=\"$test_id\"}[1m])))",
+                    "legendFormat": "P50",
+                    "refId": "C"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "ms"
+                }
+            }
+        },
+        {
+            "title": "HTTP Status Distribution",
+            "type": "piechart",
+            "id": 10,
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 13
+            },
+            "targets": [
+                {
+                    "expr": "sum by (status_code) (increase(dto_requests_total{test_id=\"$test_id\"}[$__range]))",
+                    "instant": false,
+                    "legendFormat": "{{status_code}}",
+                    "refId": "A"
+                }
+            ],
+            "options": {
+                "pieType": "donut",
+                "displayLabels": [
+                    "percent",
+                    "value"
+                ],
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "values": false
+                }
+            }
+        },
+        {
+            "title": "Network Errors over Time",
+            "type": "timeseries",
+            "id": 9,
+            "gridPos": {
+                "h": 8,
+                "w": 16,
+                "x": 8,
+                "y": 13
+            },
+            "targets": [
+                {
+                    "expr": "sum by (error_msg) (rate(dto_network_errors_total{test_id=\"$test_id\"}[10s]))",
+                    "legendFormat": "{{error_msg}}",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "drawStyle": "bars",
+                        "fillOpacity": 80
+                    },
+                    "unit": "errs/s"
+                }
+            }
+        },
+        {
+            "collapsed": true,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 21
+            },
+            "id": 11,
+            "panels": [],
+            "title": "Go Runtime Metrics",
+            "type": "row"
+        },
+        {
+            "title": "Active Goroutines",
+            "type": "timeseries",
+            "id": 12,
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 22
+            },
+            "targets": [
+                {
+                    "expr": "go_goroutines",
+                    "legendFormat": "Goroutines",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none"
+                }
+            }
+        },
+        {
+            "title": "Heap Memory Usage",
+            "type": "timeseries",
+            "id": 13,
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 8,
+                "y": 22
+            },
+            "targets": [
+                {
+                    "expr": "go_memstats_heap_alloc_bytes",
+                    "legendFormat": "Heap Alloc",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "decbytes"
+                }
+            }
+        },
+        {
+            "title": "GC Duration (1m Rate)",
+            "type": "timeseries",
+            "id": 14,
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 22
+            },
+            "targets": [
+                {
+                    "expr": "rate(go_gc_duration_seconds_sum[1m])",
+                    "legendFormat": "GC Time",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s"
+                }
+            }
+        }
+    ],
+    "schemaVersion": 38,
+    "templating": {
+        "list": [
+            {
+                "current": {
+                    "selected": false,
+                    "text": "All",
+                    "value": "$__all"
+                },
+                "hide": 0,
+                "includeAll": true,
+                "label": "Test ID",
+                "multi": false,
+                "name": "test_id",
+                "options": [],
+                "query": "label_values(dto_requests_total, test_id)",
+                "refresh": 1,
+                "regex": "",
+                "skipUrlSync": false,
+                "sort": 1,
+                "type": "query"
+            }
+        ]
+    },
+    "time": {
+        "from": "now-5m",
+        "to": "now"
+    },
+    "timezone": "browser",
+    "title": "DTO Load Testing System",
+    "uid": "dto_dashboard_v4"
+}

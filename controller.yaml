@@ -1,8 +1,0 @@
-test:
-  id: "test6 solo"
-  url: "http://localhost:8000"
-  target_rps: 1000
-  workers: 900
-  duration_seconds: 60
-  monitor:
-    enabled: true
