@@ -50,6 +50,6 @@ docker-compose up -d
 
 Grafana будет доступна по адресу http://localhost:3000
 
-В Data Source выберите Prometheus, введите адрес http://localhost:9090/metrics и затем импортируйте ```dashboard.json``` из ```/deploy```
+В Data Source выберите Prometheus, введите адрес ```http://prometheus:9090``` и затем импортируйте ```dashboard.json``` из ```/deploy```
 
 
