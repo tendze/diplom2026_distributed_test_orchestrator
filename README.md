@@ -17,7 +17,7 @@ DTO — это высокопроизводительная распределе
 Убедитесь, что у вас установлен Go (1.22+). Выполните команду:
 
 ```bash
-go install https://github.com/tendze/diplom2026_distributed_test_orchestrator@latest
+go install https://github.com/tendze/diplom2026_distributed_test_orchestrator/cmd/dtoctl@latest
 ```
 
 Убедитесь, что ваш $GOPATH/bin добавлен в переменную окружения PATH
