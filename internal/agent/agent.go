@@ -31,7 +31,7 @@ func (s *AgentService) StartTest(
 	req *agent.StartTestRequest,
 	stream agent.AgentService_StartTestServer,
 ) error {
-	runner := engine.NewFastHTTPRunner(req.Url)
+	runner := engine.NewFastHTTPRunner(req.Url, req.Method, req.Body)
 	limiter := engine.NewRateLimiter(int(req.Rps))
 	metrics := NewLocalMetrics()
 

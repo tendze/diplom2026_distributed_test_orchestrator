@@ -48,6 +48,8 @@ func NewOrchestrator(agentMap *AgentMap, metrics *AggregatedMetrics, testInfo *T
 type TestRunRequest struct {
 	TestID          string
 	URL             string
+	Method          string
+	Body            string
 	TargetRPS       int32
 	DurationSeconds int32
 	Workers         int32
@@ -147,7 +149,7 @@ func (o *Orchestrator) StartSolo(ctx context.Context, req *TestRunRequest) error
 	testCtx, cancel := context.WithTimeout(ctx, time.Duration(req.DurationSeconds)*time.Second)
 	defer cancel()
 
-	runner := engine.NewFastHTTPRunner(req.URL)
+	runner := engine.NewFastHTTPRunner(req.URL, req.Method, req.Body)
 	limiter := engine.NewRateLimiter(int(req.TargetRPS))
 
 	// Чтобы не было лишних запросов
@@ -305,7 +307,6 @@ func (o *Orchestrator) soloWorker(
 			}
 			status, latency, size, err := httpRunner.DoRequest(ctx)
 			o.metrics.Add(status, latency, size, err)
-
 
 			// TODO: async metrics exporter
 			if monitor {

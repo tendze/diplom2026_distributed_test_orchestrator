@@ -33,14 +33,15 @@ type Metrics struct {
 	Req_4Xx int64 `protobuf:"varint,7,opt,name=req_4xx,json=req4xx,proto3" json:"req_4xx,omitempty"`
 	Req_5Xx int64 `protobuf:"varint,8,opt,name=req_5xx,json=req5xx,proto3" json:"req_5xx,omitempty"`
 	// Гистограмма: ключ - latency в мс (верхняя граница), значение - кол-во запросов
-	Buckets        map[int32]int64  `protobuf:"bytes,9,rep,name=buckets,proto3" json:"buckets,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	BytesCount     uint64           `protobuf:"varint,10,opt,name=bytes_count,json=bytesCount,proto3" json:"bytes_count,omitempty"`
-	MinLatencyMs   float64          `protobuf:"fixed64,11,opt,name=min_latency_ms,json=minLatencyMs,proto3" json:"min_latency_ms,omitempty"`
-	MaxLatencyMs   float64          `protobuf:"fixed64,12,opt,name=max_latency_ms,json=maxLatencyMs,proto3" json:"max_latency_ms,omitempty"`
-	TotalLatencyMs float64          `protobuf:"fixed64,13,opt,name=total_latency_ms,json=totalLatencyMs,proto3" json:"total_latency_ms,omitempty"`
-	ErrorsDetail   map[string]int64 `protobuf:"bytes,14,rep,name=errors_detail,json=errorsDetail,proto3" json:"errors_detail,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	Buckets        map[int32]int64 `protobuf:"bytes,9,rep,name=buckets,proto3" json:"buckets,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	BytesCount     uint64          `protobuf:"varint,10,opt,name=bytes_count,json=bytesCount,proto3" json:"bytes_count,omitempty"`
+	MinLatencyMs   float64         `protobuf:"fixed64,11,opt,name=min_latency_ms,json=minLatencyMs,proto3" json:"min_latency_ms,omitempty"`
+	MaxLatencyMs   float64         `protobuf:"fixed64,12,opt,name=max_latency_ms,json=maxLatencyMs,proto3" json:"max_latency_ms,omitempty"`
+	TotalLatencyMs float64         `protobuf:"fixed64,13,opt,name=total_latency_ms,json=totalLatencyMs,proto3" json:"total_latency_ms,omitempty"`
+	// Словарь для подсчёта количества сетевых ошибок
+	ErrorsDetail  map[string]int64 `protobuf:"bytes,14,rep,name=errors_detail,json=errorsDetail,proto3" json:"errors_detail,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Metrics) Reset() {

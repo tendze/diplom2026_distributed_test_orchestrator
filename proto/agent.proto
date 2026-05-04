@@ -16,6 +16,8 @@ message StartTestRequest {
   int32 rps = 3;
   int32 duration_seconds = 4;
   int64 start_at_unix_ms = 5;
+  string method = 6;
+  string body = 7;
 }
 
 message GetStatusRequest {}

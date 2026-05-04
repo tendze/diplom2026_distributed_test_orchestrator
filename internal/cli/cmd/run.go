@@ -75,6 +75,8 @@ func runTest(cmd *cobra.Command, args []string) {
 	runRequest := controller.TestRunRequest{
 		TestID:          cfg.Test.ID,
 		URL:             cfg.Test.URL,
+		Method:          cfg.Test.Method,
+		Body:            cfg.Test.Body,
 		TargetRPS:       cfg.Test.TargetRPS,
 		DurationSeconds: cfg.Test.DurationSeconds,
 		Workers:         correctWorkers,
@@ -127,7 +129,14 @@ func runTest(cmd *cobra.Command, args []string) {
 	// CLI
 	wg.Add(1)
 
-	rep := reporter.NewCLIReporter(metrics, agentMap, runRequest, testInfo, 150*time.Millisecond, cfg.Agents.Mode)
+	rep := reporter.NewCLIReporter(
+		metrics,
+		agentMap,
+		runRequest,
+		testInfo,
+		150*time.Millisecond,
+		cfg.Agents.Mode,
+	)
 	go func() {
 		defer wg.Done()
 		rep.StartLiveReporting(ctx, int(cfg.Test.DurationSeconds))

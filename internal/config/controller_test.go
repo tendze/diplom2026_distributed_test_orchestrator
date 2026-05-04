@@ -19,6 +19,8 @@ agents:
 test:
   id: "testnum1"
   url: "http://example.com"
+  method: POST
+  body: '{"key":"value"}'
   target_rps: 100
   duration_seconds: 10
 `
@@ -33,7 +35,8 @@ test:
 	require.Equal(t, "testnum1", cfg.Test.ID)
 	require.Equal(t, "localhost:9100", cfg.Agents.Targets[0])
 	require.Equal(t, "tbank.ru/host-machine/agent1", cfg.Agents.Targets[1])
-	require.Equal(t, int32(100), cfg.Test.TargetRPS)
+	require.Equal(t, "POST", cfg.Test.Method)
+	require.Equal(t, `{"key":"value"}`, cfg.Test.Body)
 }
 
 func TestValidateControllerConfig(t *testing.T) {
@@ -76,7 +79,7 @@ func TestValidateControllerConfig(t *testing.T) {
 			modify: func(c *ControllerConfig) {
 				c.Agents.Mode = nil
 			},
-			wantErr: nil,
+			wantErr: InvalidMissingModeError,
 		},
 		{
 			name: "missing ulr",

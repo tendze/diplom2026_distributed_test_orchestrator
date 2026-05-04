@@ -1,6 +1,9 @@
 package config
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	InvalidModeError                 = errors.New("mode must be one of \"strict\" or \"any\"")
@@ -8,6 +11,7 @@ var (
 	InvalidRPSValueError             = errors.New("target rps must be > 0")
 	InvalidDurationValueError        = errors.New("test duration must be > 1 sec")
 	InvalidMissingModeError          = errors.New("missing mode for distributed test")
+	InvalidMethodError               = errors.New("invalid method")
 	InvalidNegativeWorkersCountError = errors.New("workers count cant be negative")
 )
 
@@ -26,6 +30,8 @@ type AgentsSection struct {
 type TestSection struct {
 	ID              string          `yaml:"id"`
 	URL             string          `yaml:"url"`
+	Method          string          `yaml:"method"`
+	Body            string          `yaml:"body"`
 	TargetRPS       int32           `yaml:"target_rps"`
 	DurationSeconds int32           `yaml:"duration_seconds"`
 	Workers         int32           `yaml:"workers"`
@@ -48,6 +54,21 @@ func (cc *ControllerConfig) Validate() error {
 	}
 	if err := validateURL(cc.Test.URL); err != nil {
 		return err
+	}
+	validMethods := map[string]bool{
+		"GET":     true,
+		"POST":    true,
+		"PUT":     true,
+		"DELETE":  true,
+		"PATCH":   true,
+		"HEAD":    true,
+		"OPTIONS": true,
+	}
+	if cc.Test.Method != "" && !validMethods[cc.Test.Method] {
+		return fmt.Errorf("invalid HTTP method: %s", cc.Test.Method)
+	}
+	if cc.Test.Method == "" {
+		cc.Test.Method = "GET"
 	}
 	if cc.Test.TargetRPS <= 0 {
 		return InvalidRPSValueError

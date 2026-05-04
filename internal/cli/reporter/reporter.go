@@ -211,11 +211,11 @@ func (r *CLIReporter) intro() {
 		mode = "Solo"
 	}
 
-	intro := fmt.Sprintf("Load testing %s with %d workers\nTarget RPS: %d",
-		r.testRequest.URL, r.testRequest.Workers, r.testRequest.TargetRPS)
+	intro := fmt.Sprintf("Load testing %s with %d workers\nTarget RPS: %d\nMethod: %s",
+		r.testRequest.URL, r.testRequest.Workers, r.testRequest.TargetRPS, r.testRequest.Method)
 	if !soloStart {
-		intro = fmt.Sprintf("Load testing %s\nTarget RPS: %d\nAgent mode: %s",
-			r.testRequest.URL, r.testRequest.TargetRPS, *r.agentMode)
+		intro = fmt.Sprintf("Load testing %s\nTarget RPS: %d\nAgent mode: %s\nMethod: %s",
+			r.testRequest.URL, r.testRequest.TargetRPS, *r.agentMode, r.testRequest.Method)
 	}
 	pterm.DefaultBox.WithTitle(fmt.Sprintf("Starting %s Test: <%s>", mode, r.testRequest.TestID)).Println(intro)
 }

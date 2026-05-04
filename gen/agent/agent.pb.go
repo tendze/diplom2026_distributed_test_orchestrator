@@ -29,6 +29,8 @@ type StartTestRequest struct {
 	Rps             int32                  `protobuf:"varint,3,opt,name=rps,proto3" json:"rps,omitempty"`
 	DurationSeconds int32                  `protobuf:"varint,4,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"`
 	StartAtUnixMs   int64                  `protobuf:"varint,5,opt,name=start_at_unix_ms,json=startAtUnixMs,proto3" json:"start_at_unix_ms,omitempty"`
+	Method          string                 `protobuf:"bytes,6,opt,name=method,proto3" json:"method,omitempty"`
+	Body            string                 `protobuf:"bytes,7,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -96,6 +98,20 @@ func (x *StartTestRequest) GetStartAtUnixMs() int64 {
 		return x.StartAtUnixMs
 	}
 	return 0
+}
+
+func (x *StartTestRequest) GetMethod() string {
+	if x != nil {
+		return x.Method
+	}
+	return ""
+}
+
+func (x *StartTestRequest) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
 }
 
 type GetStatusRequest struct {
@@ -190,13 +206,15 @@ var File_agent_proto protoreflect.FileDescriptor
 
 const file_agent_proto_rawDesc = "" +
 	"\n" +
-	"\vagent.proto\x12\tdto.agent\x1a\fcommon.proto\"\xa3\x01\n" +
+	"\vagent.proto\x12\tdto.agent\x1a\fcommon.proto\"\xcf\x01\n" +
 	"\x10StartTestRequest\x12\x17\n" +
 	"\atest_id\x18\x01 \x01(\tR\x06testId\x12\x10\n" +
 	"\x03url\x18\x02 \x01(\tR\x03url\x12\x10\n" +
 	"\x03rps\x18\x03 \x01(\x05R\x03rps\x12)\n" +
 	"\x10duration_seconds\x18\x04 \x01(\x05R\x0fdurationSeconds\x12'\n" +
-	"\x10start_at_unix_ms\x18\x05 \x01(\x03R\rstartAtUnixMs\"\x12\n" +
+	"\x10start_at_unix_ms\x18\x05 \x01(\x03R\rstartAtUnixMs\x12\x16\n" +
+	"\x06method\x18\x06 \x01(\tR\x06method\x12\x12\n" +
+	"\x04body\x18\a \x01(\tR\x04body\"\x12\n" +
 	"\x10GetStatusRequest\"S\n" +
 	"\x11GetStatusResponse\x12\x1b\n" +
 	"\tcpu_cores\x18\x01 \x01(\x05R\bcpuCores\x12!\n" +

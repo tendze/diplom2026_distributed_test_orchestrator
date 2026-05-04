@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -19,9 +20,11 @@ const (
 type HTTPRunner struct {
 	client *http.Client
 	url    string
+	method string
+	body   []byte
 }
 
-func NewHTTPRunner(url string) *HTTPRunner {
+func NewHTTPRunner(url, method, body string) *HTTPRunner {
 	t := &http.Transport{
 		MaxIdleConns:        10000,
 		MaxIdleConnsPerHost: 10000,
@@ -29,9 +32,15 @@ func NewHTTPRunner(url string) *HTTPRunner {
 		DisableKeepAlives:   false,
 	}
 
+	if method == "" {
+		method = http.MethodGet
+	}
+
 	return &HTTPRunner{
 		client: &http.Client{Transport: t, Timeout: 10 * time.Second},
 		url:    url,
+		method: method,
+		body:   []byte(body),
 	}
 }
 
@@ -39,7 +48,12 @@ func NewHTTPRunner(url string) *HTTPRunner {
 func (r *HTTPRunner) DoRequest() (status int, latency time.Duration, size uint64, err error) {
 	start := time.Now()
 
-	req, err := http.NewRequest(http.MethodGet, r.url, nil)
+	var bodyReader io.Reader
+	if len(r.body) > 0 {
+		bodyReader = bytes.NewReader(r.body)
+	}
+
+	req, err := http.NewRequest(r.method, r.url, bodyReader)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -64,23 +78,32 @@ func (r *HTTPRunner) DoRequest() (status int, latency time.Duration, size uint64
 type FastHTTPRunner struct {
 	client *fasthttp.Client
 	url    string
+	method string
+	body   []byte
 }
 
-func NewFastHTTPRunner(url string) *FastHTTPRunner {
+func NewFastHTTPRunner(url, method, body string) *FastHTTPRunner {
 	// Настраиваем клиент fasthttp для максимальной производительности
 	client := &fasthttp.Client{
-		Name:                     "Distributed-Load-Generator",
-		MaxConnsPerHost:          20000,
-		ReadTimeout:              5 * time.Second,
-		WriteTimeout:             5 * time.Second,
-		MaxIdleConnDuration:      60 * time.Second,
-		NoDefaultUserAgentHeader: true,
-		MaxIdemponentCallAttempts: 1, // Чтобы не ретраить при сетевых ошибках
+		Name:                      "Distributed-Load-Generator",
+		MaxConnsPerHost:           20000,
+		ReadTimeout:               5 * time.Second,
+		WriteTimeout:              5 * time.Second,
+		MaxIdleConnDuration:       60 * time.Second,
+		NoDefaultUserAgentHeader:  true,
+		MaxIdemponentCallAttempts: 1, // Для ретрая при сетевых ошибках
 	}
+
+	if method == "" {
+		method = fasthttp.MethodGet
+	}
+
 	// Настройка fasthttp
 	return &FastHTTPRunner{
 		client: client,
 		url:    url,
+		method: method,
+		body:   []byte(body),
 	}
 }
 
@@ -93,7 +116,10 @@ func (r *FastHTTPRunner) DoRequest(ctx context.Context) (status int, latency tim
 	defer fasthttp.ReleaseResponse(resp)
 
 	req.SetRequestURI(r.url)
-	req.Header.SetMethod(fasthttp.MethodGet)
+	req.Header.SetMethod(r.method)
+	if len(r.body) > 0 {
+		req.SetBody(r.body)
+	}
 
 	deadline, ok := ctx.Deadline()
 	if !ok {

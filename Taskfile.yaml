@@ -6,3 +6,6 @@ tasks:
     cmds:
       - protoc -I proto proto/common.proto --go_out=./gen/common --go_opt=paths=source_relative --go-grpc_out=./gen/common --go-grpc_opt=paths=source_relative
       - protoc -I proto proto/agent.proto --go_out=./gen/agent --go_opt=paths=source_relative --go-grpc_out=./gen/agent --go-grpc_opt=paths=source_relative
+  tests:
+    desc: Starts all tests
+    cmd: go run ./tools/run_tests.go
