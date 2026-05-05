@@ -73,14 +73,15 @@ func runTest(cmd *cobra.Command, args []string) {
 	correctWorkers := recountWorkers(cfg.Test.Workers, cfg.Test.TargetRPS)
 
 	runRequest := controller.TestRunRequest{
-		TestID:          cfg.Test.ID,
-		URL:             cfg.Test.URL,
-		Method:          cfg.Test.Method,
-		Body:            cfg.Test.Body,
-		TargetRPS:       cfg.Test.TargetRPS,
-		DurationSeconds: cfg.Test.DurationSeconds,
-		Workers:         correctWorkers,
-		Monitor:         monitor,
+		TestID:           cfg.Test.ID,
+		URL:              cfg.Test.URL,
+		Method:           cfg.Test.Method,
+		Body:             cfg.Test.Body,
+		TargetRPS:        cfg.Test.TargetRPS,
+		DurationSeconds:  cfg.Test.DurationSeconds,
+		Workers:          correctWorkers,
+		Monitor:          monitor,
+		DistributionMode: *cfg.Agents.DistributionMode,
 	}
 
 	// Настройка контекста для корректного завершения (Graceful Shutdown) с сигналом
@@ -136,6 +137,7 @@ func runTest(cmd *cobra.Command, args []string) {
 		testInfo,
 		150*time.Millisecond,
 		cfg.Agents.Mode,
+		*cfg.Agents.DistributionMode,
 	)
 	go func() {
 		defer wg.Done()

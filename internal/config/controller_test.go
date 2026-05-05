@@ -13,6 +13,7 @@ func TestLoadControllerConfig(t *testing.T) {
 	yamlData := `
 agents:
   mode: strict
+  distribution_mode: equal
   targets:
     - "localhost:9100"
     - "tbank.ru/host-machine/agent1"
@@ -37,6 +38,8 @@ test:
 	require.Equal(t, "tbank.ru/host-machine/agent1", cfg.Agents.Targets[1])
 	require.Equal(t, "POST", cfg.Test.Method)
 	require.Equal(t, `{"key":"value"}`, cfg.Test.Body)
+	require.NotNil(t, cfg.Agents.DistributionMode)
+	require.Equal(t, "equal", *cfg.Agents.DistributionMode)
 }
 
 func TestValidateControllerConfig(t *testing.T) {
@@ -44,8 +47,9 @@ func TestValidateControllerConfig(t *testing.T) {
 	validConfig := func() ControllerConfig {
 		return ControllerConfig{
 			Agents: AgentsSection{
-				Mode:    lo.ToPtr("strict"),
-				Targets: []string{"agent1"},
+				Mode:             lo.ToPtr("strict"),
+				Targets:          []string{"agent1"},
+				DistributionMode: lo.ToPtr("equal"),
 			},
 			Test: TestSection{
 				ID:              "test-1",
@@ -108,6 +112,20 @@ func TestValidateControllerConfig(t *testing.T) {
 				c.Test.DurationSeconds = 1
 			},
 			wantErr: InvalidDurationValueError,
+		},
+		{
+			name: "invalid distribution mode",
+			modify: func(c *ControllerConfig) {
+				c.Agents.DistributionMode = lo.ToPtr("invalid")
+			},
+			wantErr: InvalidDistributionError,
+		},
+		{
+			name: "empty distribution mode",
+			modify: func(cc *ControllerConfig) {
+				cc.Agents.DistributionMode = nil
+			},
+			wantErr: nil,
 		},
 	}
 

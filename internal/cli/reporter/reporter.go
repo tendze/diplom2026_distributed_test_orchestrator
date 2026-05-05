@@ -25,8 +25,9 @@ type CLIReporter struct {
 	testInfo       *controller.TestInfo
 	updateDuration time.Duration
 
-	testMode  string  // solo | distributed
-	agentMode *string // strict | any
+	testMode         string  // solo | distributed
+	agentMode        *string // strict | any
+	distributionMode string
 }
 
 func NewCLIReporter(
@@ -36,6 +37,7 @@ func NewCLIReporter(
 	testInfo *controller.TestInfo,
 	updateDuration time.Duration,
 	agentMode *string,
+	distributionMode string,
 ) *CLIReporter {
 	reporter := &CLIReporter{
 		metrics:        metrics,
@@ -44,6 +46,7 @@ func NewCLIReporter(
 		testInfo:       testInfo,
 		updateDuration: updateDuration,
 		agentMode:      agentMode,
+		distributionMode: distributionMode,
 	}
 	reporter.testMode = SOLO_MODE
 	if agents.AgentsCount > 0 {
@@ -214,8 +217,8 @@ func (r *CLIReporter) intro() {
 	intro := fmt.Sprintf("Load testing %s with %d workers\nTarget RPS: %d\nMethod: %s",
 		r.testRequest.URL, r.testRequest.Workers, r.testRequest.TargetRPS, r.testRequest.Method)
 	if !soloStart {
-		intro = fmt.Sprintf("Load testing %s\nTarget RPS: %d\nAgent mode: %s\nMethod: %s",
-			r.testRequest.URL, r.testRequest.TargetRPS, *r.agentMode, r.testRequest.Method)
+		intro = fmt.Sprintf("Load testing %s\nTarget RPS: %d\nAgent mode: %s\nDistribution mode: %s\nMethod: %s",
+			r.testRequest.URL, r.testRequest.TargetRPS, *r.agentMode, r.distributionMode, r.testRequest.Method)
 	}
 	pterm.DefaultBox.WithTitle(fmt.Sprintf("Starting %s Test: <%s>", mode, r.testRequest.TestID)).Println(intro)
 }

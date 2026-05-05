@@ -46,14 +46,15 @@ func NewOrchestrator(agentMap *AgentMap, metrics *AggregatedMetrics, testInfo *T
 
 // TestRunRequest группирует параметры запуска теста.
 type TestRunRequest struct {
-	TestID          string
-	URL             string
-	Method          string
-	Body            string
-	TargetRPS       int32
-	DurationSeconds int32
-	Workers         int32
-	Monitor         bool
+	TestID           string
+	URL              string
+	Method           string
+	Body             string
+	TargetRPS        int32
+	DurationSeconds  int32
+	Workers          int32
+	Monitor          bool
+	DistributionMode string
 }
 
 type agentHandle struct {
@@ -96,9 +97,15 @@ func (o *Orchestrator) StartTest(ctx context.Context, mode string, req TestRunRe
 	var wg sync.WaitGroup
 
 	for _, agent := range activeAgents {
-		// Вес агента = его ядра / суммарные ядра
-		weight := float64(agent.cores) / float64(totalCores)
-		agentRPS := int32(float64(req.TargetRPS) * weight)
+		var agentRPS int32
+		if req.DistributionMode == "equal" {
+			// equal - поровну
+			agentRPS = req.TargetRPS / int32(len(activeAgents))
+		} else {
+			// adaptive - пропорционально ядрам
+			weight := float64(agent.cores) / float64(totalCores)
+			agentRPS = int32(float64(req.TargetRPS) * weight)
+		}
 
 		if agentRPS == 0 {
 			agentRPS = 1 // Гарантируем минимальную нагрузку

@@ -24,7 +24,6 @@ type AgentsSection struct {
 	Mode             *string  `yaml:"mode"`              // strict | any
 	DistributionMode *string  `yaml:"distribution_mode"` // equal | adaptive
 	Targets          []string `yaml:"targets"`
-	// TODO: add distribution_mode -  equal/adaptive
 }
 
 type TestSection struct {
@@ -48,6 +47,10 @@ func (cc *ControllerConfig) Validate() error {
 	}
 	if cc.Agents.DistributionMode != nil && *cc.Agents.DistributionMode != "adaptive" && *cc.Agents.DistributionMode != "equal" {
 		return InvalidDistributionError
+	}
+	if cc.Agents.DistributionMode == nil {
+		cc.Agents.DistributionMode = new(string)
+		*cc.Agents.DistributionMode = "adaptive"
 	}
 	if len(cc.Agents.Targets) != 0 && cc.Agents.Mode == nil {
 		return InvalidMissingModeError
